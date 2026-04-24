@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Whateka Admin</title>
+    <script>
+      // SPA fallback for GitHub Pages: rewrite deep-link URL so index.html loads.
+      (function () {
+        var l = window.location;
+        var path = l.pathname + l.search + l.hash;
+        sessionStorage.setItem('spa-redirect', path);
+        l.replace(l.origin + '/');
+      })();
+    </script>
+  </head>
+  <body></body>
+</html>
