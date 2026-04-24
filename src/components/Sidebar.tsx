@@ -17,8 +17,8 @@ const NAV = [
   { to: '/submissions', label: 'Soumissions', icon: Inbox },
   { to: '/feedbacks', label: 'Feedbacks', icon: MessageSquare },
   { to: '/questionnaires', label: 'Questionnaires', icon: ListChecks },
-  { to: '/users', label: 'Utilisateurs', icon: Users, superAdmin: true },
   { to: '/stats', label: 'Statistiques', icon: BarChart3 },
+  { to: '/users', label: 'Gestion utilisateurs', icon: Users, superAdmin: true },
 ];
 
 export function Sidebar() {
