@@ -95,9 +95,7 @@ function validate(v: ActivityFormValues): string | null {
   if (!v.title.trim()) return 'Le titre est requis.';
   if (!v.location_name.trim()) return 'Le lieu est requis.';
   if (v.categories.length === 0) return 'Sélectionne au moins une catégorie.';
-  const desc = v.description.trim();
-  if (desc.length < 200 || desc.length > 800)
-    return 'La description doit faire entre 200 et 800 caractères.';
+  if (!v.description.trim()) return 'La description est requise.';
   if (v.latitude === '' || v.latitude < -90 || v.latitude > 90)
     return 'Latitude invalide (-90 à 90).';
   if (v.longitude === '' || v.longitude < -180 || v.longitude > 180)
@@ -162,8 +160,6 @@ export function ActivityForm({
     }
   }
 
-  const descLen = values.description.trim().length;
-
   return (
     <form onSubmit={handle} className="space-y-5">
       {error && (
@@ -223,12 +219,7 @@ export function ActivityForm({
       </div>
 
       <div>
-        <div className="flex items-center justify-between">
-          <label className="label">Description *</label>
-          <span className={`text-xs ${descLen < 200 || descLen > 800 ? 'text-rose-600' : 'text-slate-500'}`}>
-            {descLen} / 200–800
-          </span>
-        </div>
+        <label className="label">Description *</label>
         <textarea
           className="input min-h-[120px]"
           value={values.description}

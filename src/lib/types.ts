@@ -26,17 +26,7 @@ export const FEATURES = [
 
 export const SEASONS = ['Printemps', 'Été', 'Automne', 'Hiver'] as const;
 
-export const SOCIAL_TAGS = [
-  'Famille',
-  'Couple',
-  'Amis',
-  'Solo',
-  'Groupe',
-  'Enfants',
-  'Ados',
-  'Adultes',
-  'Seniors',
-] as const;
+export const SOCIAL_TAGS = ['Famille', 'Couple', 'Amis', 'Solo'] as const;
 
 export const PRICE_LEVELS: { value: number; label: string }[] = [
   { value: 1, label: 'Gratuit' },
