@@ -9,11 +9,21 @@ import { Modal } from '../components/Modal';
 import { ActivityForm, formToPayload } from '../components/ActivityForm';
 import { useToast } from '../components/Toast';
 
+type SortKey = 'created_desc' | 'created_asc' | 'title_asc' | 'title_desc';
+
+const SORT_OPTIONS: { value: SortKey; label: string }[] = [
+  { value: 'created_desc', label: 'Plus récentes' },
+  { value: 'created_asc', label: 'Plus anciennes' },
+  { value: 'title_asc', label: 'Titre A → Z' },
+  { value: 'title_desc', label: 'Titre Z → A' },
+];
+
 export function Activities() {
   const [rows, setRows] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState<string>('');
+  const [sort, setSort] = useState<SortKey>('created_desc');
   const [editing, setEditing] = useState<Activity | 'new' | null>(null);
   const toast = useToast();
 
@@ -33,12 +43,32 @@ export function Activities() {
   }, [load]);
 
   const filtered = useMemo(() => {
-    return rows.filter((r) => {
+    const base = rows.filter((r) => {
       if (search && !r.title.toLowerCase().includes(search.toLowerCase())) return false;
       if (category && !(r.category ?? '').split(',').map((s) => s.trim()).includes(category)) return false;
       return true;
     });
-  }, [rows, search, category]);
+    const titleCmp = (a: Activity, b: Activity) =>
+      a.title.localeCompare(b.title, 'fr', { sensitivity: 'base' });
+    const dateCmp = (a: Activity, b: Activity) =>
+      new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    const sorted = [...base];
+    switch (sort) {
+      case 'title_asc':
+        sorted.sort(titleCmp);
+        break;
+      case 'title_desc':
+        sorted.sort((a, b) => -titleCmp(a, b));
+        break;
+      case 'created_asc':
+        sorted.sort(dateCmp);
+        break;
+      case 'created_desc':
+      default:
+        sorted.sort((a, b) => -dateCmp(a, b));
+    }
+    return sorted;
+  }, [rows, search, category, sort]);
 
   async function handleSave(values: Parameters<typeof formToPayload>[0]) {
     const payload = formToPayload(values);
@@ -95,6 +125,18 @@ export function Activities() {
           {CATEGORIES.map((c) => (
             <option key={c.value} value={c.value}>
               {c.label}
+            </option>
+          ))}
+        </select>
+        <select
+          className="input max-w-[200px]"
+          value={sort}
+          onChange={(e) => setSort(e.target.value as SortKey)}
+          aria-label="Tri"
+        >
+          {SORT_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
             </option>
           ))}
         </select>

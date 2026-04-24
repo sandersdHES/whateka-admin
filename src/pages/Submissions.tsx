@@ -11,12 +11,21 @@ import { useAuth } from '../lib/auth';
 import { useToast } from '../components/Toast';
 
 type Tab = 'pending' | 'all';
+type SortKey = 'created_desc' | 'created_asc' | 'title_asc' | 'title_desc';
+
+const SORT_OPTIONS: { value: SortKey; label: string }[] = [
+  { value: 'created_desc', label: 'Plus récentes' },
+  { value: 'created_asc', label: 'Plus anciennes' },
+  { value: 'title_asc', label: 'Titre A → Z' },
+  { value: 'title_desc', label: 'Titre Z → A' },
+];
 
 export function Submissions() {
   const [rows, setRows] = useState<ActivitySubmission[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>('pending');
   const [search, setSearch] = useState('');
+  const [sort, setSort] = useState<SortKey>('created_desc');
   const [editing, setEditing] = useState<ActivitySubmission | null>(null);
   const [rejecting, setRejecting] = useState<ActivitySubmission | null>(null);
   const [rejectNote, setRejectNote] = useState('');
@@ -39,12 +48,32 @@ export function Submissions() {
   }, [load]);
 
   const filtered = useMemo(() => {
-    return rows.filter((r) => {
+    const base = rows.filter((r) => {
       if (tab === 'pending' && r.status !== 'pending') return false;
       if (search && !r.title.toLowerCase().includes(search.toLowerCase())) return false;
       return true;
     });
-  }, [rows, tab, search]);
+    const titleCmp = (a: ActivitySubmission, b: ActivitySubmission) =>
+      a.title.localeCompare(b.title, 'fr', { sensitivity: 'base' });
+    const dateCmp = (a: ActivitySubmission, b: ActivitySubmission) =>
+      new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    const sorted = [...base];
+    switch (sort) {
+      case 'title_asc':
+        sorted.sort(titleCmp);
+        break;
+      case 'title_desc':
+        sorted.sort((a, b) => -titleCmp(a, b));
+        break;
+      case 'created_asc':
+        sorted.sort(dateCmp);
+        break;
+      case 'created_desc':
+      default:
+        sorted.sort((a, b) => -dateCmp(a, b));
+    }
+    return sorted;
+  }, [rows, tab, search, sort]);
 
   const pendingCount = rows.filter((r) => r.status === 'pending').length;
 
@@ -148,6 +177,18 @@ export function Submissions() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
+        <select
+          className="input max-w-[200px]"
+          value={sort}
+          onChange={(e) => setSort(e.target.value as SortKey)}
+          aria-label="Tri"
+        >
+          {SORT_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
       </div>
 
       {loading ? (
