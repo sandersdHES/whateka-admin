@@ -314,11 +314,12 @@ export function Submissions() {
               .from('activity_submissions')
               .update({ [field]: value })
               .eq('id', s.id);
-            if (error) toast.error(error.message);
-            else {
-              toast.success('Champ mis à jour.');
-              await load();
+            if (error) {
+              toast.error(`Échec mise à jour ${field}: ${error.message}`);
+              throw new Error(error.message);
             }
+            toast.success(`${field} mis à jour.`);
+            await load();
           }}
         />
       ) : (
@@ -1109,9 +1110,9 @@ function ImageEnricher({
   onAccept,
 }: {
   submission: ActivitySubmission;
-  onAccept: (url: string) => void;
+  onAccept: (url: string) => void | Promise<void>;
 }) {
-  const [state, setState] = useState<'idle' | 'loading' | 'result' | 'empty'>('idle');
+  const [state, setState] = useState<'idle' | 'loading' | 'result' | 'empty' | 'saving'>('idle');
   const [imgUrl, setImgUrl] = useState<string | null>(null);
 
   async function search() {
@@ -1168,7 +1169,28 @@ function ImageEnricher({
     );
   }
 
+  if (state === 'saving') {
+    return (
+      <div className="flex h-full w-full flex-col items-center justify-center gap-3 text-emerald-700">
+        <span className="inline-block h-8 w-8 animate-spin rounded-full border-3 border-emerald-200 border-t-emerald-600" />
+        <div className="text-sm font-medium">Sauvegarde…</div>
+      </div>
+    );
+  }
+
   // result : preview avec accept/reject
+  async function handleAccept() {
+    if (!imgUrl) return;
+    setState('saving');
+    try {
+      await onAccept(imgUrl);
+      setState('idle');
+      setImgUrl(null);
+    } catch (_e) {
+      setState('result');
+    }
+  }
+
   return (
     <div className="relative h-full w-full">
       {imgUrl && (
@@ -1176,11 +1198,7 @@ function ImageEnricher({
       )}
       <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-2 bg-gradient-to-t from-black/70 to-transparent p-4">
         <button
-          onClick={() => {
-            if (imgUrl) onAccept(imgUrl);
-            setState('idle');
-            setImgUrl(null);
-          }}
+          onClick={handleAccept}
           className="inline-flex items-center gap-1 rounded-md bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-600"
         >
           <Check size={13} /> Accepter
@@ -1247,9 +1265,9 @@ function EnrichField({
   field: string;
   label: string;
   compact?: boolean;
-  onAccept: (value: any) => void;
+  onAccept: (value: any) => void | Promise<void>;
 }) {
-  const [state, setState] = useState<'idle' | 'loading' | 'result' | 'empty'>('idle');
+  const [state, setState] = useState<'idle' | 'loading' | 'result' | 'empty' | 'saving'>('idle');
   const [suggestion, setSuggestion] = useState<any>(null);
 
   async function search() {
@@ -1278,10 +1296,19 @@ function EnrichField({
     }
   }
 
-  function accept() {
-    onAccept(suggestion);
-    setState('idle');
-    setSuggestion(null);
+  async function accept() {
+    setState('saving');
+    try {
+      await onAccept(suggestion);
+      // Au succès, le parent recharge les rows et l'EnrichField unmount
+      // (champ rempli) — pas besoin de reset d'état si on reste monté.
+      setState('idle');
+      setSuggestion(null);
+    } catch (_e) {
+      // L'erreur est déjà affichée via toast côté parent.
+      // On revient à l'état result pour permettre un retry ou rejet.
+      setState('result');
+    }
   }
 
   if (state === 'idle') {
@@ -1304,6 +1331,15 @@ function EnrichField({
       <div className="inline-flex items-center gap-2 rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-600">
         <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-slate-300 border-t-brand-cyan" />
         Recherche en cours…
+      </div>
+    );
+  }
+
+  if (state === 'saving') {
+    return (
+      <div className="inline-flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-700 ring-1 ring-emerald-200">
+        <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-emerald-200 border-t-emerald-600" />
+        Sauvegarde…
       </div>
     );
   }
