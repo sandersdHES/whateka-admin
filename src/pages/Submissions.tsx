@@ -816,13 +816,19 @@ function CardDeck({
 
           {/* Map editable : clic pour changer la localisation */}
           <div className="mt-5">
-            <div className="mb-1.5 flex items-center justify-between">
+            <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
               <span className="text-xs font-semibold text-slate-700">
                 Localisation {pendingCoords && <span className="ml-1 text-amber-600">(modifiée)</span>}
               </span>
-              <span className="text-[11px] text-slate-500">
-                {(pendingCoords?.lat ?? s.latitude).toFixed(5)}, {(pendingCoords?.lng ?? s.longitude).toFixed(5)}
-              </span>
+              <div className="flex items-center gap-3">
+                <CardGeocodeButton
+                  submission={s}
+                  onResult={(lat, lng) => setPendingCoords({ lat, lng })}
+                />
+                <span className="text-[11px] text-slate-500">
+                  {(pendingCoords?.lat ?? s.latitude).toFixed(5)}, {(pendingCoords?.lng ?? s.longitude).toFixed(5)}
+                </span>
+              </div>
             </div>
             <div className="overflow-hidden rounded-xl ring-1 ring-slate-200" style={{ height: 220 }}>
               <MapContainer
@@ -973,6 +979,87 @@ function Meta({ label, value }: { label: string; value: string }) {
       </div>
       <div className="mt-0.5 font-medium text-slate-700">{value}</div>
     </div>
+  );
+}
+
+/**
+ * Bouton compact "Localiser avec IA" pour la vue cartes.
+ * Appelle geocode-place avec titre + lieu + Suisse, met les coords
+ * pendantes à la valeur retournée. L'utilisateur valide ensuite via
+ * le bouton "Enregistrer la nouvelle position" dans la map.
+ */
+function CardGeocodeButton({
+  submission,
+  onResult,
+}: {
+  submission: ActivitySubmission;
+  onResult: (lat: number, lng: number) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [feedback, setFeedback] = useState<'ok' | 'empty' | null>(null);
+
+  async function run() {
+    setBusy(true);
+    setFeedback(null);
+    try {
+      const { data, error } = await supabase.functions.invoke<{
+        lat?: number;
+        lng?: number;
+        display_name?: string;
+        error?: string;
+      }>('geocode-place', {
+        body: { query: `${submission.title} ${submission.location_name} Switzerland` },
+      });
+      if (error || !data?.lat || !data?.lng) {
+        setFeedback('empty');
+        setTimeout(() => setFeedback(null), 3000);
+      } else {
+        onResult(data.lat, data.lng);
+        setFeedback('ok');
+        setTimeout(() => setFeedback(null), 2500);
+      }
+    } catch (_e) {
+      setFeedback('empty');
+      setTimeout(() => setFeedback(null), 3000);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (feedback === 'ok') {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700 ring-1 ring-emerald-200">
+        <Check size={11} /> Localisation trouvée
+      </span>
+    );
+  }
+  if (feedback === 'empty') {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-md bg-rose-50 px-2 py-1 text-[11px] font-semibold text-rose-700 ring-1 ring-rose-200">
+        Pas de résultat
+      </span>
+    );
+  }
+
+  return (
+    <button
+      onClick={run}
+      disabled={busy}
+      className="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-800 transition hover:bg-amber-100 disabled:opacity-60"
+      title="Localiser automatiquement via Google Places"
+    >
+      {busy ? (
+        <>
+          <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-amber-300 border-t-amber-700" />
+          Localisation…
+        </>
+      ) : (
+        <>
+          <Sparkles size={11} />
+          Localiser avec l'IA
+        </>
+      )}
+    </button>
   );
 }
 
