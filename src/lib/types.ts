@@ -54,6 +54,17 @@ export const CATEGORY_COLORS: Record<string, string> = {
   institution: '#475569',
 };
 
+/** Type de récurrence pour les activités à dates particulières. */
+export type RecurrenceType = 'one_off' | 'weekly' | 'seasonal';
+/** Fréquence de mise à jour planifiée des fiches institution/évènement. */
+export type UpdateFrequency =
+  | 'weekly'
+  | 'monthly'
+  | 'quarterly'
+  | 'yearly'
+  | 'before_season'
+  | 'manual';
+
 export type Activity = {
   id: number;
   title: string;
@@ -72,6 +83,26 @@ export type Activity = {
   is_indoor: boolean;
   is_outdoor: boolean | null;
   created_at: string;
+  // Contraintes temporelles (cf. /conditional + recommend-activity v27)
+  date_label: string | null;
+  date_start: string | null;
+  date_end: string | null;
+  recurrence_type: RecurrenceType | null;
+  seasonal_months: number[] | null;
+  weekly_days: number[] | null;
+  // Suivi périodique (cf. /scheduled)
+  update_frequency: UpdateFrequency | null;
+  last_updated_at: string | null;
+  next_update_at: string | null;
+  update_notes: string | null;
+  parent_institution_id: number | null;
+  // Soft-delete (cf. archives)
+  archived: boolean;
+  // Traduction EN auto via Gemini
+  title_en: string | null;
+  description_en: string | null;
+  date_label_en: string | null;
+  update_notes_en: string | null;
 };
 
 export type ActivitySubmission = Omit<Activity, 'id' | 'created_at'> & {

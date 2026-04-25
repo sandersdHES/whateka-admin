@@ -55,6 +55,12 @@ function durationDays(start: string | null, end: string | null): number | null {
  * - weekly : toujours proposable
  */
 function isProposableNow(a: ConditionalActivity, now: Date): boolean {
+  // v29 : un event sans date_start est une fiche template (club, institution).
+  // Pas recommandable — l'admin doit créer une entrée match-specific.
+  const cats = (a.category ?? '').split(',').map((c) => c.trim().toLowerCase());
+  const isEvent = cats.includes('event');
+  if (isEvent && (!a.date_start || !a.date_end)) return false;
+
   if (!a.recurrence_type) return true;
 
   // v26 : contraintes additives (AND).

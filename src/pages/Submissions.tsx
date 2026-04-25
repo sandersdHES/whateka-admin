@@ -723,7 +723,16 @@ function DuplicatePrompt({
         <div className="text-xs text-slate-600">
           📍 {submission.location_name}
           {submission.activity_url && (
-            <span className="ml-2">🔗 {new URL(submission.activity_url).hostname.replace(/^www\./, '')}</span>
+            <span className="ml-2">
+              🔗{' '}
+              {(() => {
+                try {
+                  return new URL(submission.activity_url!).hostname.replace(/^www\./, '');
+                } catch {
+                  return submission.activity_url;
+                }
+              })()}
+            </span>
           )}
         </div>
       </div>
@@ -840,13 +849,17 @@ function CardDeck({
   onFieldUpdate: (s: ActivitySubmission, field: string, value: any) => void;
 }) {
   const [pendingCoords, setPendingCoords] = useState<{ lat: number; lng: number } | null>(null);
-
-  // Reset les coords pendantes a chaque changement de carte
-  useEffect(() => {
-    setPendingCoords(null);
-  }, [index, submissions]);
   const safeIndex = Math.min(index, submissions.length - 1);
   const s = submissions[safeIndex];
+
+  // Reset les coords pendantes UNIQUEMENT quand l'ID de la fiche change
+  // (vraie navigation), pas quand le tableau submissions est juste recharge
+  // (ce qui arrive frequemment apres chaque save : la reference du tableau
+  // change mais la fiche au safeIndex reste la meme).
+  const currentId = s?.id ?? null;
+  useEffect(() => {
+    setPendingCoords(null);
+  }, [currentId]);
   if (!s) return null;
 
   const cats = (s.category ?? '').split(',').map((c) => c.trim().toLowerCase()).filter(Boolean);
@@ -1247,7 +1260,8 @@ function CardGeocodeButton({
         setFeedback('ok');
         setTimeout(() => setFeedback(null), 2500);
       }
-    } catch (_e) {
+    } catch (err) {
+      console.error('CardGeocodeButton failed', err);
       setFeedback('empty');
       setTimeout(() => setFeedback(null), 3000);
     } finally {
@@ -1331,7 +1345,8 @@ function LocationEditor({
         setCoords({ lat: data.lat, lng: data.lng });
         setGeocodeMsg(`Trouvé : ${data.display_name ?? ''}`);
       }
-    } catch (_e) {
+    } catch (err) {
+      console.error('LocationEditor.autoGeocode failed', err);
       setGeocodeMsg('Erreur durant le géocodage.');
     } finally {
       setGeocoding(false);
@@ -1446,7 +1461,8 @@ function ImageEnricher({
       }
       setImgUrl(data.url);
       setState('result');
-    } catch (_e) {
+    } catch (err) {
+      console.error('ImageEnricher.search failed', err);
       setState('empty');
       setTimeout(() => setState('idle'), 3000);
     }
