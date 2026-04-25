@@ -574,35 +574,45 @@ function WeeklyChart({
         <div className="text-xs text-slate-500">52 semaines</div>
       </div>
       <div className="relative">
-        <div className="flex h-28 items-stretch gap-[3px]">
-          {weeks.map((w) => {
-            const ratio = max > 0 ? w.count / max : 0;
-            const heightPct = w.count > 0 ? Math.max(8, ratio * 100) : 2;
-            const isCurrent = w.weekIndex === currentWeekIdx;
-            const tooltip = `S${w.weekIndex + 1} (${w.weekStart.toLocaleDateString('fr-CH', {
-              day: '2-digit',
-              month: 'short',
-            })}) — ${w.count} activité${w.count > 1 ? 's' : ''}`;
-            return (
-              <div
-                key={w.weekIndex}
-                className="group relative flex flex-1 items-end"
-                title={tooltip}
-              >
-                <div
-                  className={`w-full rounded-t-sm transition-colors ${
-                    isCurrent
-                      ? 'bg-brand-cyan'
-                      : w.count === 0
-                        ? 'bg-slate-100'
-                        : 'bg-emerald-400 group-hover:bg-emerald-500'
-                  }`}
-                  style={{ height: `${heightPct}%` }}
-                />
-              </div>
-            );
-          })}
-        </div>
+        {(() => {
+          const CHART_HEIGHT = 112; // px (≈ h-28)
+          return (
+            <div
+              className="flex items-end gap-[3px]"
+              style={{ height: `${CHART_HEIGHT}px` }}
+            >
+              {weeks.map((w) => {
+                const ratio = max > 0 ? w.count / max : 0;
+                const heightPx = w.count > 0
+                  ? Math.max(10, Math.round(ratio * CHART_HEIGHT))
+                  : 3;
+                const isCurrent = w.weekIndex === currentWeekIdx;
+                const tooltip = `S${w.weekIndex + 1} (${w.weekStart.toLocaleDateString('fr-CH', {
+                  day: '2-digit',
+                  month: 'short',
+                })}) — ${w.count} activité${w.count > 1 ? 's' : ''}`;
+                return (
+                  <div
+                    key={w.weekIndex}
+                    className="group relative flex-1"
+                    title={tooltip}
+                    style={{ height: `${heightPx}px` }}
+                  >
+                    <div
+                      className={`h-full w-full rounded-t-sm transition-colors ${
+                        isCurrent
+                          ? 'bg-brand-cyan'
+                          : w.count === 0
+                            ? 'bg-slate-200'
+                            : 'bg-emerald-400 group-hover:bg-emerald-500'
+                      }`}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
         <div className="mt-2 flex text-[10px] text-slate-400">
           {weeks.map((w) => {
             const marker = monthMarkers.find((m) => m.idx === w.weekIndex);
