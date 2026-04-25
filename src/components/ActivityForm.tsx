@@ -1,4 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react';
+import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import {
   CATEGORIES,
   Category,
@@ -8,6 +11,55 @@ import {
   SOCIAL_TAGS,
   type Activity,
 } from '../lib/types';
+
+// Fix l'icone de marqueur par defaut Leaflet (probleme de URL avec Vite)
+const _markerIcon = L.divIcon({
+  html: '<div style="width:24px;height:24px;background:#FF6F61;border:2.5px solid white;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,.3);"></div>',
+  className: '',
+  iconSize: [24, 24],
+  iconAnchor: [12, 12],
+});
+
+function _MapClickHandler({ onPick }: { onPick: (lat: number, lng: number) => void }) {
+  useMapEvents({
+    click(e) {
+      onPick(e.latlng.lat, e.latlng.lng);
+    },
+  });
+  return null;
+}
+
+function _MapCenterUpdater({ lat, lng, zoom }: { lat: number; lng: number; zoom: number }) {
+  const map = useMap();
+  useEffect(() => {
+    map.setView([lat, lng], zoom, { animate: true });
+  }, [lat, lng, zoom, map]);
+  return null;
+}
+
+function cleanTitleForGeocode(t: string): string {
+  let cleaned = t.trim();
+  const prefixes = [
+    'Visite guidée du ', 'Visite guidée des ', 'Visite guidée de ',
+    'Visite du ', 'Visite de la ', 'Visite des ', 'Visite de ',
+    'Découverte du ', 'Découverte de ', 'Découverte des ',
+    'Balade au ', 'Balade en ', 'Balade dans ',
+    'Randonnée au ', 'Randonnée à ', 'Randonnée vers ',
+  ];
+  for (const p of prefixes) {
+    if (cleaned.toLowerCase().startsWith(p.toLowerCase())) {
+      cleaned = cleaned.slice(p.length).trim();
+      break;
+    }
+  }
+  for (const sep of [' - ', ' — ', ' – ', ' | ']) {
+    if (cleaned.includes(sep)) {
+      cleaned = cleaned.split(sep)[0].trim();
+      break;
+    }
+  }
+  return cleaned;
+}
 
 export type ActivityFormValues = {
   title: string;
@@ -125,6 +177,8 @@ export function ActivityForm({
   const [values, setValues] = useState<ActivityFormValues>(emptyActivityForm());
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [geocoding, setGeocoding] = useState(false);
+  const [geocodeInfo, setGeocodeInfo] = useState<string | null>(null);
 
   useEffect(() => {
     setValues(initial ? activityToForm(initial) : emptyActivityForm());
@@ -143,6 +197,63 @@ export function ActivityForm({
     value: T,
   ): T[] {
     return list.includes(value) ? list.filter((x) => x !== value) : [...list, value];
+  }
+
+  async function autoGeocode() {
+    const title = values.title.trim();
+    const loc = values.location_name.trim();
+    if (!title && !loc) {
+      setError('Remplis au moins le titre et le lieu pour la localisation auto.');
+      return;
+    }
+    setGeocoding(true);
+    setError(null);
+    setGeocodeInfo(null);
+    const cleaned = cleanTitleForGeocode(title);
+    const candidates = [
+      cleaned && loc ? `${cleaned}, ${loc}, Suisse` : null,
+      cleaned ? `${cleaned}, Suisse` : null,
+      loc ? `${loc}, Suisse` : null,
+    ].filter(Boolean) as string[];
+
+    try {
+      for (const q of candidates) {
+        const url =
+          'https://nominatim.openstreetmap.org/search?' +
+          new URLSearchParams({
+            q,
+            format: 'json',
+            limit: '1',
+            countrycodes: 'ch',
+          }).toString();
+        const resp = await fetch(url, {
+          headers: { 'Accept': 'application/json' },
+        });
+        if (!resp.ok) continue;
+        const data = (await resp.json()) as Array<{
+          lat: string;
+          lon: string;
+          display_name: string;
+        }>;
+        if (data.length === 0) continue;
+        const lat = Number(data[0].lat);
+        const lng = Number(data[0].lon);
+        if (Number.isNaN(lat) || Number.isNaN(lng)) continue;
+        setValues((v) => ({ ...v, latitude: lat, longitude: lng }));
+        const name = data[0].display_name || '';
+        setGeocodeInfo(name.length > 80 ? `${name.slice(0, 80)}...` : name);
+        return;
+      }
+      setError(
+        `Aucune adresse trouvée pour "${title}" à "${loc}". Saisis manuellement ou tape sur la carte.`,
+      );
+    } catch (e: unknown) {
+      setError(
+        `Erreur géolocalisation : ${e instanceof Error ? e.message : String(e)}`,
+      );
+    } finally {
+      setGeocoding(false);
+    }
   }
 
   async function handle(e: FormEvent) {
@@ -250,6 +361,27 @@ export function ActivityForm({
         </div>
       </div>
 
+      <div>
+        <button
+          type="button"
+          onClick={autoGeocode}
+          disabled={geocoding}
+          className="inline-flex items-center gap-2 rounded-lg border border-brand-cyan bg-brand-cyan/10 px-4 py-2 text-sm font-medium text-brand-cyan transition hover:bg-brand-cyan/20 disabled:opacity-50"
+        >
+          {geocoding ? (
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-brand-cyan border-t-transparent" />
+          ) : (
+            <span>📍</span>
+          )}
+          {geocoding ? 'Localisation...' : 'Localiser automatiquement (titre + lieu)'}
+        </button>
+        {geocodeInfo && (
+          <p className="mt-2 text-xs text-emerald-700">
+            ✓ {geocodeInfo}
+          </p>
+        )}
+      </div>
+
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <div>
           <label className="label">Latitude *</label>
@@ -294,6 +426,52 @@ export function ActivityForm({
             }
             required
           />
+        </div>
+      </div>
+
+      {/* Mini-carte de previsualisation : tap pour ajuster la position */}
+      <div>
+        <label className="label">Aperçu sur la carte (clique pour ajuster)</label>
+        <div className="overflow-hidden rounded-lg border border-slate-200">
+          <MapContainer
+            center={[
+              typeof values.latitude === 'number' ? values.latitude : 46.5197,
+              typeof values.longitude === 'number' ? values.longitude : 6.6323,
+            ]}
+            zoom={
+              typeof values.latitude === 'number' &&
+              typeof values.longitude === 'number'
+                ? 14
+                : 9
+            }
+            style={{ height: '280px', width: '100%' }}
+            scrollWheelZoom={true}
+          >
+            <TileLayer
+              url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png"
+              subdomains={['a', 'b', 'c', 'd']}
+              attribution="© OpenStreetMap, © CARTO"
+            />
+            <_MapClickHandler
+              onPick={(lat, lng) => {
+                setValues((v) => ({ ...v, latitude: lat, longitude: lng }));
+              }}
+            />
+            {typeof values.latitude === 'number' &&
+              typeof values.longitude === 'number' && (
+                <>
+                  <Marker
+                    position={[values.latitude, values.longitude]}
+                    icon={_markerIcon}
+                  />
+                  <_MapCenterUpdater
+                    lat={values.latitude}
+                    lng={values.longitude}
+                    zoom={14}
+                  />
+                </>
+              )}
+          </MapContainer>
         </div>
       </div>
 
