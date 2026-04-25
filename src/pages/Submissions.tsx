@@ -10,7 +10,7 @@ import { ActivityForm, formToPayload } from '../components/ActivityForm';
 import { useAuth } from '../lib/auth';
 import { useToast } from '../components/Toast';
 
-type Tab = 'pending' | 'on_hold' | 'institutions' | 'all';
+type Tab = 'pending' | 'on_hold' | 'tracked' | 'all';
 type SortKey = 'created_desc' | 'created_asc' | 'title_asc' | 'title_desc';
 
 const SORT_OPTIONS: { value: SortKey; label: string }[] = [
@@ -51,9 +51,8 @@ export function Submissions() {
     const base = rows.filter((r) => {
       if (tab === 'pending' && r.status !== 'pending') return false;
       if (tab === 'on_hold' && r.status !== 'on_hold') return false;
-      if (tab === 'institutions') {
-        const cats = (r.category ?? '').split(',').map((c) => c.trim().toLowerCase());
-        if (!cats.includes('institution')) return false;
+      if (tab === 'tracked') {
+        if (!(r as any).update_frequency) return false;
       }
       if (search && !r.title.toLowerCase().includes(search.toLowerCase())) return false;
       return true;
@@ -82,10 +81,7 @@ export function Submissions() {
 
   const pendingCount = rows.filter((r) => r.status === 'pending').length;
   const onHoldCount = rows.filter((r) => r.status === 'on_hold').length;
-  const institutionsCount = rows.filter((r) => {
-    const cats = (r.category ?? '').split(',').map((c) => c.trim().toLowerCase());
-    return cats.includes('institution');
-  }).length;
+  const trackedCount = rows.filter((r) => !!(r as any).update_frequency).length;
 
   async function handleHold(s: ActivitySubmission) {
     const { error } = await supabase
@@ -203,7 +199,7 @@ export function Submissions() {
 
       <div className="flex flex-wrap gap-3">
         <div className="inline-flex overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-slate-200">
-          {(['pending', 'on_hold', 'institutions', 'all'] as Tab[]).map((t) => (
+          {(['pending', 'on_hold', 'tracked', 'all'] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -215,8 +211,8 @@ export function Submissions() {
                 ? `Nouvelles (${pendingCount})`
                 : t === 'on_hold'
                   ? `En attente (${onHoldCount})`
-                  : t === 'institutions'
-                    ? `Institutions (${institutionsCount})`
+                  : t === 'tracked'
+                    ? `À tenir à jour (${trackedCount})`
                     : 'Toutes'}
             </button>
           ))}
