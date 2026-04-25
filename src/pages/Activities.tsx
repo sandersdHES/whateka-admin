@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ExternalLink, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { CATEGORIES, type Activity } from '../lib/types';
-import { categoryLabel, formatDuration, toIndoorOutdoorLabel } from '../lib/format';
+import { formatDuration, toIndoorOutdoorLabel } from '../lib/format';
+import { CategoryChips } from './Submissions';
 import { Loader } from '../components/ui/Loader';
 import { EmptyState } from '../components/ui/EmptyState';
 import { Modal } from '../components/Modal';
@@ -175,8 +176,9 @@ export function Activities() {
                       )}
                       <div>
                         <div className="font-semibold text-slate-900">{a.title}</div>
-                        <div className="text-xs text-slate-500">
-                          #{a.id} · {categoryLabel(a.category)}
+                        <div className="mt-0.5 flex items-center gap-1.5 text-xs text-slate-500">
+                          <span>#{a.id}</span>
+                          <CategoryChips category={a.category} />
                         </div>
                       </div>
                     </div>

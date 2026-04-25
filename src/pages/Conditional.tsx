@@ -17,6 +17,7 @@ import { EmptyState } from '../components/ui/EmptyState';
 import { Modal } from '../components/Modal';
 import { ActivityForm, formToPayload } from '../components/ActivityForm';
 import { useToast } from '../components/Toast';
+import { CategoryChips } from './Submissions';
 
 type ConditionalActivity = Activity & {
   date_label: string | null;
@@ -437,10 +438,10 @@ export function Conditional() {
                   <tr key={a.id} className="hover:bg-slate-50/60">
                     <td className="px-4 py-3">
                       <div className="font-semibold text-slate-900">{a.title}</div>
-                      <div className="text-xs text-slate-500">
-                        #{a.id} · {a.location_name}
+                      <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+                        <span>#{a.id} · {a.location_name}</span>
                         <span
-                          className={`ml-2 rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                          className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
                             a.source === 'submission'
                               ? 'bg-amber-50 text-amber-700 ring-1 ring-amber-200'
                               : 'bg-slate-50 text-slate-600 ring-1 ring-slate-200'
@@ -448,6 +449,7 @@ export function Conditional() {
                         >
                           {a.source === 'submission' ? 'Soumission' : 'Validée'}
                         </span>
+                        <CategoryChips category={a.category} size="xs" />
                       </div>
                     </td>
                     <td className="px-4 py-3">

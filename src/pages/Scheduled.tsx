@@ -14,6 +14,7 @@ import { EmptyState } from '../components/ui/EmptyState';
 import { Modal } from '../components/Modal';
 import { ActivityForm, formToPayload } from '../components/ActivityForm';
 import { useToast } from '../components/Toast';
+import { CategoryChips } from './Submissions';
 
 type ScheduledItem = {
   id: number;
@@ -249,10 +250,10 @@ export function Scheduled() {
                   <tr key={`${r.source}-${r.id}`} className={`hover:bg-slate-50/60 ${overdue ? 'bg-rose-50/30' : ''}`}>
                     <td className="px-4 py-3">
                       <div className="font-semibold text-slate-900">{r.title}</div>
-                      <div className="text-xs text-slate-500">
-                        #{r.id} · {r.location_name}
+                      <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+                        <span>#{r.id} · {r.location_name}</span>
                         <span
-                          className={`ml-2 rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                          className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
                             r.source === 'submission'
                               ? 'bg-amber-50 text-amber-700 ring-1 ring-amber-200'
                               : 'bg-slate-50 text-slate-600 ring-1 ring-slate-200'
@@ -260,6 +261,7 @@ export function Scheduled() {
                         >
                           {r.source === 'submission' ? 'Soumission' : 'Validée'}
                         </span>
+                        <CategoryChips category={r.category} size="xs" />
                       </div>
                     </td>
                     <td className="px-4 py-3 text-slate-700">

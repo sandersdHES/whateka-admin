@@ -20,6 +20,7 @@ import 'leaflet/dist/leaflet.css';
 import { supabase } from '../lib/supabase';
 import type { ActivitySubmission } from '../lib/types';
 import { categoryLabel, formatDate, formatDuration, formatPrice } from '../lib/format';
+import { CATEGORY_COLORS } from '../lib/types';
 import { Loader } from '../components/ui/Loader';
 import { EmptyState } from '../components/ui/EmptyState';
 import { Modal } from '../components/Modal';
@@ -337,8 +338,9 @@ export function Submissions() {
                 <tr key={s.id} className="hover:bg-slate-50/60">
                   <td className="px-4 py-3">
                     <div className="font-semibold text-slate-900">{s.title}</div>
-                    <div className="text-xs text-slate-500">
-                      #{s.id} · {categoryLabel(s.category)}
+                    <div className="mt-0.5 flex items-center gap-1.5 text-xs text-slate-500">
+                      <span>#{s.id}</span>
+                      <CategoryChips category={s.category} />
                     </div>
                   </td>
                   <td className="px-4 py-3 text-slate-700">{s.location_name}</td>
@@ -616,16 +618,20 @@ function CardDeck({
           >
             {statusLabel}
           </span>
-          {/* Categories */}
-          <div className="absolute bottom-3 left-3 flex flex-wrap gap-1.5">
-            {cats.map((c) => (
-              <span
-                key={c}
-                className="rounded-full bg-white/90 px-2.5 py-1 text-xs font-semibold text-slate-700 backdrop-blur-sm"
-              >
-                {categoryLabel(c)}
-              </span>
-            ))}
+          {/* Categories — chips colorés */}
+          <div className="absolute bottom-3 left-3 right-3 flex flex-wrap gap-1.5">
+            {cats.map((c) => {
+              const color = CATEGORY_COLORS[c] ?? '#94a3b8';
+              return (
+                <span
+                  key={c}
+                  className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-bold text-white shadow-sm"
+                  style={{ backgroundColor: color }}
+                >
+                  {categoryLabel(c)}
+                </span>
+              );
+            })}
           </div>
         </div>
 
@@ -836,6 +842,46 @@ function CardDeck({
           Cette soumission est déjà {s.status === 'approved' ? 'approuvée' : 'rejetée'} — utilise les flèches pour passer à la suivante.
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Affiche les catégories d'une activité sous forme de petites pastilles
+ * colorées avec le label complet — pour utilisation inline dans tableaux
+ * et listes denses (sans devoir ouvrir la fiche).
+ */
+export function CategoryChips({
+  category,
+  size = 'sm',
+}: {
+  category: string | null | undefined;
+  size?: 'xs' | 'sm';
+}) {
+  if (!category) return null;
+  const cats = category
+    .split(',')
+    .map((c) => c.trim().toLowerCase())
+    .filter(Boolean);
+  if (cats.length === 0) return null;
+
+  const padding = size === 'xs' ? 'px-1.5 py-0.5' : 'px-2 py-0.5';
+  const text = size === 'xs' ? 'text-[10px]' : 'text-[11px]';
+
+  return (
+    <div className="flex flex-wrap gap-1">
+      {cats.map((c) => {
+        const color = CATEGORY_COLORS[c] ?? '#94a3b8';
+        return (
+          <span
+            key={c}
+            className={`inline-flex items-center rounded-full font-semibold text-white ${padding} ${text}`}
+            style={{ backgroundColor: color }}
+          >
+            {categoryLabel(c)}
+          </span>
+        );
+      })}
     </div>
   );
 }
