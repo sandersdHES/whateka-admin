@@ -152,33 +152,21 @@ export function Conditional() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    // On lit les 2 tables : activities (validées) + activity_submissions
-    // (pending/approved/on_hold). Les rejected sont exclues.
+    // On lit UNIQUEMENT activities (validées). Les soumissions ne doivent
+    // pas apparaître ici tant qu'elles ne sont pas approuvées.
     const filterCond = 'recurrence_type.not.is.null,date_label.not.is.null,date_start.not.is.null';
-    const [actRes, subRes] = await Promise.all([
-      supabase.from('activities').select('*').or(filterCond),
-      supabase
-        .from('activity_submissions')
-        .select('*')
-        .or(filterCond)
-        .neq('status', 'rejected'),
-    ]);
-    if (actRes.error) toast.error(actRes.error.message);
-    if (subRes.error) toast.error(subRes.error.message);
-    const acts = ((actRes.data as any[]) ?? []).map(
+    const { data, error } = await supabase.from('activities').select('*').or(filterCond);
+    if (error) toast.error(error.message);
+    const acts = ((data as any[]) ?? []).map(
       (a) => ({ ...a, source: 'activity', archived: a.archived ?? false }) as ConditionalActivity,
     );
-    const subs = ((subRes.data as any[]) ?? []).map(
-      (s) => ({ ...s, source: 'submission', archived: s.archived ?? false }) as ConditionalActivity,
-    );
-    const merged = [...acts, ...subs].sort((a, b) => {
-      // Tri : non-archivées d'abord, puis par date_end croissante
+    const sorted = acts.sort((a, b) => {
       if (a.archived !== b.archived) return a.archived ? 1 : -1;
       const ae = a.date_end ?? '9999-12-31';
       const be = b.date_end ?? '9999-12-31';
       return ae.localeCompare(be);
     });
-    setRows(merged);
+    setRows(sorted);
     setLoading(false);
   }, [toast]);
 
