@@ -25,9 +25,12 @@ type ConditionalActivity = Activity & {
   recurrence_type: 'one_off' | 'weekly' | 'seasonal' | null;
   seasonal_months: number[] | null;
   weekly_days: number[] | null;
+  archived: boolean;
+  source: 'activity' | 'submission';
+  status?: string;
 };
 
-type FilterTab = 'all' | 'active' | 'upcoming' | 'expired' | 'weekly' | 'seasonal';
+type FilterTab = 'all' | 'active' | 'upcoming' | 'expired' | 'weekly' | 'seasonal' | 'archived';
 
 const WEEKDAYS = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
 const MONTHS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'];
@@ -143,13 +146,33 @@ export function Conditional() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('activities')
-      .select('*')
-      .or('recurrence_type.not.is.null,date_label.not.is.null,date_start.not.is.null')
-      .order('date_end', { ascending: true, nullsFirst: false });
-    if (error) toast.error(error.message);
-    setRows((data as ConditionalActivity[]) ?? []);
+    // On lit les 2 tables : activities (validées) + activity_submissions
+    // (pending/approved/on_hold). Les rejected sont exclues.
+    const filterCond = 'recurrence_type.not.is.null,date_label.not.is.null,date_start.not.is.null';
+    const [actRes, subRes] = await Promise.all([
+      supabase.from('activities').select('*').or(filterCond),
+      supabase
+        .from('activity_submissions')
+        .select('*')
+        .or(filterCond)
+        .neq('status', 'rejected'),
+    ]);
+    if (actRes.error) toast.error(actRes.error.message);
+    if (subRes.error) toast.error(subRes.error.message);
+    const acts = ((actRes.data as any[]) ?? []).map(
+      (a) => ({ ...a, source: 'activity', archived: a.archived ?? false }) as ConditionalActivity,
+    );
+    const subs = ((subRes.data as any[]) ?? []).map(
+      (s) => ({ ...s, source: 'submission', archived: s.archived ?? false }) as ConditionalActivity,
+    );
+    const merged = [...acts, ...subs].sort((a, b) => {
+      // Tri : non-archivées d'abord, puis par date_end croissante
+      if (a.archived !== b.archived) return a.archived ? 1 : -1;
+      const ae = a.date_end ?? '9999-12-31';
+      const be = b.date_end ?? '9999-12-31';
+      return ae.localeCompare(be);
+    });
+    setRows(merged);
     setLoading(false);
   }, [toast]);
 
@@ -163,14 +186,27 @@ export function Conditional() {
     let expired = 0;
     let weekly = 0;
     let seasonal = 0;
+    let archived = 0;
     for (const a of rows) {
+      if (a.archived) {
+        archived++;
+        continue;
+      }
       if (isExpired(a, now)) expired++;
       else if (isProposableNow(a, now)) active++;
       else if (a.recurrence_type === 'one_off') upcoming++;
       if (a.recurrence_type === 'weekly') weekly++;
       if (a.recurrence_type === 'seasonal') seasonal++;
     }
-    return { total: rows.length, active, upcoming, expired, weekly, seasonal };
+    return {
+      total: rows.filter((r) => !r.archived).length,
+      active,
+      upcoming,
+      expired,
+      weekly,
+      seasonal,
+      archived,
+    };
   }, [rows, now]);
 
   // Calcule pour chaque semaine de l'année en cours combien d'activités à
@@ -210,6 +246,10 @@ export function Conditional() {
   const filtered = useMemo(() => {
     return rows.filter((a) => {
       if (search && !a.title.toLowerCase().includes(search.toLowerCase())) return false;
+      // Onglet "Archivées" affiche uniquement les archivées. Les autres onglets
+      // les excluent (mais elles restent comptabilisées dans le graphe).
+      if (tab === 'archived') return a.archived;
+      if (a.archived) return false;
       switch (tab) {
         case 'active':
           return !isExpired(a, now) && isProposableNow(a, now);
@@ -231,7 +271,8 @@ export function Conditional() {
   async function handleSave(values: Parameters<typeof formToPayload>[0]) {
     if (!editing) return;
     const payload = formToPayload(values);
-    const { error } = await supabase.from('activities').update(payload).eq('id', editing.id);
+    const table = editing.source === 'submission' ? 'activity_submissions' : 'activities';
+    const { error } = await supabase.from(table).update(payload).eq('id', editing.id);
     if (error) throw new Error(error.message);
     toast.success('Activité mise à jour.');
     setEditing(null);
@@ -257,8 +298,9 @@ export function Conditional() {
     const newLabel = a.date_label?.includes(yearOld)
       ? a.date_label.split(yearOld).join(yearNew)
       : a.date_label;
+    const table = a.source === 'submission' ? 'activity_submissions' : 'activities';
     const { error } = await supabase
-      .from('activities')
+      .from(table)
       .update({ date_start: newStart, date_end: newEnd, date_label: newLabel })
       .eq('id', a.id);
     if (error) toast.error(error.message);
@@ -267,10 +309,24 @@ export function Conditional() {
   }
 
   async function handleDelete(a: ConditionalActivity) {
-    if (!confirm(`Supprimer définitivement « ${a.title} » ?`)) return;
-    const { error } = await supabase.from('activities').delete().eq('id', a.id);
+    if (
+      !confirm(
+        `Archiver « ${a.title} » ?\n\nL'activité ne sera plus proposée aux utilisateurs et disparaîtra des onglets actifs, mais restera comptabilisée dans le graphique de disponibilité (mémoire historique). Tu pourras la retrouver dans l'onglet "Archivées".`,
+      )
+    )
+      return;
+    const table = a.source === 'submission' ? 'activity_submissions' : 'activities';
+    const { error } = await supabase.from(table).update({ archived: true }).eq('id', a.id);
     if (error) toast.error(error.message);
-    else toast.success('Activité supprimée.');
+    else toast.success('Activité archivée.');
+    await load();
+  }
+
+  async function handleUnarchive(a: ConditionalActivity) {
+    const table = a.source === 'submission' ? 'activity_submissions' : 'activities';
+    const { error } = await supabase.from(table).update({ archived: false }).eq('id', a.id);
+    if (error) toast.error(error.message);
+    else toast.success('Activité restaurée.');
     await load();
   }
 
@@ -281,6 +337,7 @@ export function Conditional() {
     { value: 'weekly', label: 'Hebdo', count: counts.weekly, icon: RefreshCw },
     { value: 'seasonal', label: 'Saisonnières', count: counts.seasonal, icon: CalendarClock },
     { value: 'all', label: 'Toutes', count: counts.total, icon: CalendarClock },
+    { value: 'archived', label: 'Archivées', count: counts.archived, icon: CalendarX },
   ];
 
   return (
@@ -367,6 +424,15 @@ export function Conditional() {
                       <div className="font-semibold text-slate-900">{a.title}</div>
                       <div className="text-xs text-slate-500">
                         #{a.id} · {a.location_name}
+                        <span
+                          className={`ml-2 rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                            a.source === 'submission'
+                              ? 'bg-amber-50 text-amber-700 ring-1 ring-amber-200'
+                              : 'bg-slate-50 text-slate-600 ring-1 ring-slate-200'
+                          }`}
+                        >
+                          {a.source === 'submission' ? 'Soumission' : 'Validée'}
+                        </span>
                       </div>
                     </td>
                     <td className="px-4 py-3">
@@ -396,7 +462,7 @@ export function Conditional() {
                         >
                           <Pencil size={16} />
                         </button>
-                        {isExpired(a, now) && a.recurrence_type === 'one_off' && (
+                        {isExpired(a, now) && a.recurrence_type === 'one_off' && !a.archived && (
                           <button
                             onClick={() => handleReprogram(a)}
                             className="rounded-md p-2 text-emerald-600 hover:bg-emerald-50"
@@ -405,13 +471,23 @@ export function Conditional() {
                             <RefreshCw size={16} />
                           </button>
                         )}
-                        <button
-                          onClick={() => handleDelete(a)}
-                          className="rounded-md p-2 text-rose-500 hover:bg-rose-50"
-                          title="Supprimer"
-                        >
-                          <Trash2 size={16} />
-                        </button>
+                        {a.archived ? (
+                          <button
+                            onClick={() => handleUnarchive(a)}
+                            className="rounded-md p-2 text-emerald-600 hover:bg-emerald-50"
+                            title="Restaurer"
+                          >
+                            <RefreshCw size={16} />
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleDelete(a)}
+                            className="rounded-md p-2 text-rose-500 hover:bg-rose-50"
+                            title="Archiver (reste dans le graphique)"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
