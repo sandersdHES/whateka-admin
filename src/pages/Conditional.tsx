@@ -52,36 +52,34 @@ function durationDays(start: string | null, end: string | null): number | null {
  */
 function isProposableNow(a: ConditionalActivity, now: Date): boolean {
   if (!a.recurrence_type) return true;
-  if (a.recurrence_type === 'weekly') {
-    // v25 : weekly = visible uniquement le jour de la semaine indique.
-    if (Array.isArray(a.weekly_days) && a.weekly_days.length > 0) {
-      return a.weekly_days.includes(now.getDay());
-    }
-    return true;
-  }
-  if (a.recurrence_type === 'seasonal') {
-    const month = now.getMonth() + 1;
-    return (a.seasonal_months ?? []).includes(month);
-  }
-  if (a.recurrence_type === 'one_off') {
-    if (!a.date_start || !a.date_end) return true;
-    const start = new Date(a.date_start);
-    const end = new Date(a.date_end);
+
+  // v26 : contraintes additives (AND).
+  const hasWeekly = (a.weekly_days ?? []).length > 0;
+  const hasSeasonal = (a.seasonal_months ?? []).length > 0;
+  const hasOneOff = a.recurrence_type === 'one_off' && !!a.date_start && !!a.date_end;
+
+  if (hasWeekly && !(a.weekly_days ?? []).includes(now.getDay())) return false;
+  if (hasSeasonal && !(a.seasonal_months ?? []).includes(now.getMonth() + 1)) return false;
+  if (hasOneOff) {
+    const start = new Date(a.date_start!);
+    const end = new Date(a.date_end!);
     end.setHours(23, 59, 59, 999);
     if (now > end) return false;
-    const dur = durationDays(a.date_start, a.date_end) ?? 0;
+    const dur = durationDays(a.date_start!, a.date_end!) ?? 0;
     if (dur <= 7) {
-      const window = new Date(end);
-      window.setDate(window.getDate() - 21);
-      return now >= window;
+      const w = new Date(end);
+      w.setDate(w.getDate() - 21);
+      if (now < w) return false;
+    } else if (dur < 30) {
+      const w = new Date(start);
+      w.setDate(w.getDate() - 21);
+      if (now < w) return false;
+    } else {
+      if (now < start) return false;
     }
-    if (dur < 30) {
-      const window = new Date(start);
-      window.setDate(window.getDate() - 21);
-      return now >= window;
-    }
-    return now >= start;
   }
+
+  if (a.recurrence_type === 'seasonal' && !hasSeasonal) return false;
   return true;
 }
 

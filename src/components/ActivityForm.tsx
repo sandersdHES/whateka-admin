@@ -555,19 +555,13 @@ export function ActivityForm({
               />
             </div>
             <div>
-              <label className="label">Type de contrainte</label>
+              <label className="label">Type de contrainte (étiquette)</label>
               <select
                 className="input"
                 value={values.recurrence_type}
                 onChange={(e) => {
                   const t = e.target.value as ActivityFormValues['recurrence_type'];
                   update('recurrence_type', t);
-                  if (t !== 'seasonal') update('seasonal_months', []);
-                  if (t !== 'weekly') update('weekly_days', []);
-                  if (t !== 'one_off') {
-                    update('date_start', '');
-                    update('date_end', '');
-                  }
                 }}
               >
                 <option value="">— (aucune)</option>
@@ -575,40 +569,73 @@ export function ActivityForm({
                 <option value="weekly">Récurrence hebdomadaire (jour(s) de la semaine)</option>
                 <option value="seasonal">Saisonnier (mois de l'année)</option>
               </select>
+              <p className="mt-1 text-xs text-slate-500">
+                Astuce : les 3 contraintes ci-dessous se combinent (ex: marché folklorique
+                de Vevey = samedis + juillet-août).
+              </p>
             </div>
 
-            {values.recurrence_type === 'one_off' && (
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="label">Date de début</label>
-                  <input
-                    className="input"
-                    type="date"
-                    value={values.date_start}
-                    onChange={(e) => update('date_start', e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="label">Date de fin</label>
-                  <input
-                    className="input"
-                    type="date"
-                    value={values.date_end}
-                    onChange={(e) => update('date_end', e.target.value)}
-                  />
-                </div>
-              </div>
-            )}
-
-            {values.recurrence_type === 'weekly' && (
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="label">Jour(s) de la semaine</label>
-                <div className="flex flex-wrap gap-2">
-                  {['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'].map((d, i) => (
+                <label className="label">Date de début (optionnel)</label>
+                <input
+                  className="input"
+                  type="date"
+                  value={values.date_start}
+                  onChange={(e) => update('date_start', e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="label">Date de fin (optionnel)</label>
+                <input
+                  className="input"
+                  type="date"
+                  value={values.date_end}
+                  onChange={(e) => update('date_end', e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="label">Jour(s) de la semaine (optionnel)</label>
+              <div className="flex flex-wrap gap-2">
+                {['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'].map((d, i) => (
+                  <label
+                    key={d}
+                    className={`cursor-pointer rounded-md border px-3 py-1 text-xs font-medium transition ${
+                      values.weekly_days.includes(i)
+                        ? 'border-brand-cyan bg-brand-cyan text-white'
+                        : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      className="hidden"
+                      checked={values.weekly_days.includes(i)}
+                      onChange={() => {
+                        const next = values.weekly_days.includes(i)
+                          ? values.weekly_days.filter((x) => x !== i)
+                          : [...values.weekly_days, i].sort();
+                        update('weekly_days', next);
+                      }}
+                    />
+                    {d}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="label">Mois de l'année (optionnel)</label>
+              <div className="flex flex-wrap gap-2">
+                {['Jan','Fév','Mar','Avr','Mai','Juin','Juil','Août','Sep','Oct','Nov','Déc'].map((m, i) => {
+                  const monthNum = i + 1;
+                  const active = values.seasonal_months.includes(monthNum);
+                  return (
                     <label
-                      key={d}
+                      key={m}
                       className={`cursor-pointer rounded-md border px-3 py-1 text-xs font-medium transition ${
-                        values.weekly_days.includes(i)
+                        active
                           ? 'border-brand-cyan bg-brand-cyan text-white'
                           : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'
                       }`}
@@ -616,55 +643,20 @@ export function ActivityForm({
                       <input
                         type="checkbox"
                         className="hidden"
-                        checked={values.weekly_days.includes(i)}
+                        checked={active}
                         onChange={() => {
-                          const next = values.weekly_days.includes(i)
-                            ? values.weekly_days.filter((x) => x !== i)
-                            : [...values.weekly_days, i].sort();
-                          update('weekly_days', next);
+                          const next = active
+                            ? values.seasonal_months.filter((x) => x !== monthNum)
+                            : [...values.seasonal_months, monthNum].sort((a, b) => a - b);
+                          update('seasonal_months', next);
                         }}
                       />
-                      {d}
+                      {m}
                     </label>
-                  ))}
-                </div>
+                  );
+                })}
               </div>
-            )}
-
-            {values.recurrence_type === 'seasonal' && (
-              <div>
-                <label className="label">Mois de l'année</label>
-                <div className="flex flex-wrap gap-2">
-                  {['Jan','Fév','Mar','Avr','Mai','Juin','Juil','Août','Sep','Oct','Nov','Déc'].map((m, i) => {
-                    const monthNum = i + 1;
-                    const active = values.seasonal_months.includes(monthNum);
-                    return (
-                      <label
-                        key={m}
-                        className={`cursor-pointer rounded-md border px-3 py-1 text-xs font-medium transition ${
-                          active
-                            ? 'border-brand-cyan bg-brand-cyan text-white'
-                            : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          className="hidden"
-                          checked={active}
-                          onChange={() => {
-                            const next = active
-                              ? values.seasonal_months.filter((x) => x !== monthNum)
-                              : [...values.seasonal_months, monthNum].sort((a, b) => a - b);
-                            update('seasonal_months', next);
-                          }}
-                        />
-                        {m}
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+            </div>
           </div>
         )}
       </fieldset>
