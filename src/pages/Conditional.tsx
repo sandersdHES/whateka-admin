@@ -169,6 +169,40 @@ export function Conditional() {
     return { total: rows.length, active, upcoming, expired, weekly, seasonal };
   }, [rows, now]);
 
+  // Calcule pour chaque semaine de l'année en cours combien d'activités à
+  // condition seraient proposables (selon la même logique que isProposableNow).
+  const weeklyHeatmap = useMemo(() => {
+    const year = now.getFullYear();
+    // Premier lundi de l'année (ou 1er jan si lundi). On part du 1er janvier
+    // et on ajoute 7j à chaque itération — l'index correspond à la semaine ISO approx.
+    const start = new Date(year, 0, 1);
+    const startDay = start.getDay(); // 0=dim..6=sam
+    // On veut commencer un lundi : décale au prochain lundi (ou recule au lundi précédent).
+    const offsetToMonday = startDay === 0 ? -6 : 1 - startDay;
+    start.setDate(start.getDate() + offsetToMonday);
+    const weeks: { weekIndex: number; weekStart: Date; count: number }[] = [];
+    for (let w = 0; w < 52; w++) {
+      const ws = new Date(start);
+      ws.setDate(ws.getDate() + w * 7);
+      // Sample: milieu de la semaine (mercredi midi) pour stabilité.
+      const sample = new Date(ws);
+      sample.setDate(sample.getDate() + 2);
+      sample.setHours(12, 0, 0, 0);
+      let count = 0;
+      for (const a of rows) {
+        if (isExpired(a, sample)) continue;
+        if (isProposableNow(a, sample)) count++;
+      }
+      weeks.push({ weekIndex: w, weekStart: ws, count });
+    }
+    const maxCount = weeks.reduce((m, w) => Math.max(m, w.count), 0);
+    const currentWeekIdx = (() => {
+      const diffDays = Math.floor((now.getTime() - start.getTime()) / 86400000);
+      return Math.max(0, Math.min(51, Math.floor(diffDays / 7)));
+    })();
+    return { weeks, maxCount, currentWeekIdx };
+  }, [rows, now]);
+
   const filtered = useMemo(() => {
     return rows.filter((a) => {
       if (search && !a.title.toLowerCase().includes(search.toLowerCase())) return false;
@@ -263,6 +297,14 @@ export function Conditional() {
         <DashCard label="Hebdo" value={counts.weekly} cls="bg-indigo-100 text-indigo-800" />
         <DashCard label="Saisonnières" value={counts.seasonal} cls="bg-teal-100 text-teal-800" />
       </div>
+
+      {/* Heatmap 52 semaines */}
+      <WeeklyChart
+        weeks={weeklyHeatmap.weeks}
+        max={weeklyHeatmap.maxCount}
+        currentWeekIdx={weeklyHeatmap.currentWeekIdx}
+        year={now.getFullYear()}
+      />
 
       {/* Filtres */}
       <div className="flex flex-wrap gap-2">
@@ -400,6 +442,102 @@ function DashCard({ label, value, cls }: { label: string; value: number; cls: st
     <div className={`rounded-xl p-4 ${cls}`}>
       <div className="text-xs font-medium uppercase tracking-wide opacity-80">{label}</div>
       <div className="mt-1 text-2xl font-bold">{value}</div>
+    </div>
+  );
+}
+
+function WeeklyChart({
+  weeks,
+  max,
+  currentWeekIdx,
+  year,
+}: {
+  weeks: { weekIndex: number; weekStart: Date; count: number }[];
+  max: number;
+  currentWeekIdx: number;
+  year: number;
+}) {
+  // Marqueurs de mois : on capture le premier index de semaine de chaque mois
+  const monthMarkers: { idx: number; label: string }[] = [];
+  let lastMonth = -1;
+  for (const w of weeks) {
+    const m = w.weekStart.getMonth();
+    if (m !== lastMonth) {
+      monthMarkers.push({
+        idx: w.weekIndex,
+        label: ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'][m],
+      });
+      lastMonth = m;
+    }
+  }
+
+  return (
+    <div className="rounded-2xl bg-white p-5 shadow-soft ring-1 ring-slate-100">
+      <div className="mb-3 flex items-baseline justify-between">
+        <div>
+          <div className="text-sm font-semibold text-slate-900">Disponibilité par semaine</div>
+          <div className="text-xs text-slate-500">
+            Nombre d'activités proposables chaque semaine de {year}
+            {max > 0 ? ` · pic : ${max}` : ''}
+          </div>
+        </div>
+        <div className="text-xs text-slate-500">52 semaines</div>
+      </div>
+      <div className="relative">
+        <div className="flex h-28 items-end gap-[3px]">
+          {weeks.map((w) => {
+            const ratio = max > 0 ? w.count / max : 0;
+            const heightPct = w.count > 0 ? Math.max(8, ratio * 100) : 2;
+            const isCurrent = w.weekIndex === currentWeekIdx;
+            const tooltip = `S${w.weekIndex + 1} (${w.weekStart.toLocaleDateString('fr-CH', {
+              day: '2-digit',
+              month: 'short',
+            })}) — ${w.count} activité${w.count > 1 ? 's' : ''}`;
+            return (
+              <div
+                key={w.weekIndex}
+                className="group relative flex-1"
+                title={tooltip}
+              >
+                <div
+                  className={`w-full rounded-t-sm transition-colors ${
+                    isCurrent
+                      ? 'bg-brand-cyan'
+                      : w.count === 0
+                        ? 'bg-slate-100'
+                        : 'bg-emerald-400 group-hover:bg-emerald-500'
+                  }`}
+                  style={{ height: `${heightPct}%` }}
+                />
+              </div>
+            );
+          })}
+        </div>
+        <div className="mt-2 flex text-[10px] text-slate-400">
+          {weeks.map((w) => {
+            const marker = monthMarkers.find((m) => m.idx === w.weekIndex);
+            return (
+              <div key={w.weekIndex} className="flex-1 text-center">
+                {marker ? marker.label : ''}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <div className="mt-3 flex items-center gap-4 text-[11px] text-slate-500">
+        <div className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-sm bg-emerald-400" />
+          <span>Semaine standard</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-sm bg-brand-cyan" />
+          <span>Semaine actuelle</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-sm bg-slate-100 ring-1 ring-slate-200" />
+          <span>Aucune activité</span>
+        </div>
+      </div>
     </div>
   );
 }
