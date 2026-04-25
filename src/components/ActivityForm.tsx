@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { supabase } from '../lib/supabase';
 import {
   CATEGORIES,
   Category,
@@ -37,29 +38,6 @@ function _MapCenterUpdater({ lat, lng, zoom }: { lat: number; lng: number; zoom:
   return null;
 }
 
-function cleanTitleForGeocode(t: string): string {
-  let cleaned = t.trim();
-  const prefixes = [
-    'Visite guidée du ', 'Visite guidée des ', 'Visite guidée de ',
-    'Visite du ', 'Visite de la ', 'Visite des ', 'Visite de ',
-    'Découverte du ', 'Découverte de ', 'Découverte des ',
-    'Balade au ', 'Balade en ', 'Balade dans ',
-    'Randonnée au ', 'Randonnée à ', 'Randonnée vers ',
-  ];
-  for (const p of prefixes) {
-    if (cleaned.toLowerCase().startsWith(p.toLowerCase())) {
-      cleaned = cleaned.slice(p.length).trim();
-      break;
-    }
-  }
-  for (const sep of [' - ', ' — ', ' – ', ' | ']) {
-    if (cleaned.includes(sep)) {
-      cleaned = cleaned.split(sep)[0].trim();
-      break;
-    }
-  }
-  return cleaned;
-}
 
 export type ActivityFormValues = {
   title: string;
@@ -209,44 +187,39 @@ export function ActivityForm({
     setGeocoding(true);
     setError(null);
     setGeocodeInfo(null);
-    const cleaned = cleanTitleForGeocode(title);
-    const candidates = [
-      cleaned && loc ? `${cleaned}, ${loc}, Suisse` : null,
-      cleaned ? `${cleaned}, Suisse` : null,
-      loc ? `${loc}, Suisse` : null,
-    ].filter(Boolean) as string[];
+
+    // Appelle l'edge function Supabase qui proxie Google Places API.
+    // La cle Google reste cote serveur (secret Supabase), jamais exposee ici.
+    const query = [title, loc].filter(Boolean).join(', ');
 
     try {
-      for (const q of candidates) {
-        const url =
-          'https://nominatim.openstreetmap.org/search?' +
-          new URLSearchParams({
-            q,
-            format: 'json',
-            limit: '1',
-            countrycodes: 'ch',
-          }).toString();
-        const resp = await fetch(url, {
-          headers: { 'Accept': 'application/json' },
-        });
-        if (!resp.ok) continue;
-        const data = (await resp.json()) as Array<{
-          lat: string;
-          lon: string;
-          display_name: string;
-        }>;
-        if (data.length === 0) continue;
-        const lat = Number(data[0].lat);
-        const lng = Number(data[0].lon);
-        if (Number.isNaN(lat) || Number.isNaN(lng)) continue;
-        setValues((v) => ({ ...v, latitude: lat, longitude: lng }));
-        const name = data[0].display_name || '';
-        setGeocodeInfo(name.length > 80 ? `${name.slice(0, 80)}...` : name);
+      const { data, error: invokeErr } = await supabase.functions.invoke(
+        'geocode-place',
+        { body: { query } },
+      );
+      if (invokeErr) {
+        setError(`Erreur géolocalisation : ${invokeErr.message}`);
         return;
       }
-      setError(
-        `Aucune adresse trouvée pour "${title}" à "${loc}". Saisis manuellement ou tape sur la carte.`,
-      );
+      if (data && typeof data === 'object') {
+        const d = data as {
+          lat?: number;
+          lng?: number;
+          display_name?: string;
+          error?: string;
+        };
+        if (typeof d.lat === 'number' && typeof d.lng === 'number') {
+          setValues((v) => ({ ...v, latitude: d.lat!, longitude: d.lng! }));
+          const name = d.display_name || '';
+          setGeocodeInfo(name.length > 80 ? `${name.slice(0, 80)}...` : name);
+          return;
+        }
+        if (d.error) {
+          setError(`${d.error}. Saisis manuellement ou clique sur la carte.`);
+          return;
+        }
+      }
+      setError('Aucun lieu trouvé. Saisis manuellement ou clique sur la carte.');
     } catch (e: unknown) {
       setError(
         `Erreur géolocalisation : ${e instanceof Error ? e.message : String(e)}`,
