@@ -52,7 +52,13 @@ function durationDays(start: string | null, end: string | null): number | null {
  */
 function isProposableNow(a: ConditionalActivity, now: Date): boolean {
   if (!a.recurrence_type) return true;
-  if (a.recurrence_type === 'weekly') return true;
+  if (a.recurrence_type === 'weekly') {
+    // v25 : weekly = visible uniquement le jour de la semaine indique.
+    if (Array.isArray(a.weekly_days) && a.weekly_days.length > 0) {
+      return a.weekly_days.includes(now.getDay());
+    }
+    return true;
+  }
   if (a.recurrence_type === 'seasonal') {
     const month = now.getMonth() + 1;
     return (a.seasonal_months ?? []).includes(month);
