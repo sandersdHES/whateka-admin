@@ -2,6 +2,7 @@ import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard,
   Calendar,
+  CalendarClock,
   Inbox,
   MessageSquare,
   ListChecks,
@@ -14,6 +15,7 @@ import { useAuth } from '../lib/auth';
 const NAV = [
   { to: '/dashboard', label: 'Tableau de bord', icon: LayoutDashboard },
   { to: '/activities', label: 'Activités', icon: Calendar },
+  { to: '/conditional', label: 'Activités à condition', icon: CalendarClock },
   { to: '/submissions', label: 'Soumissions', icon: Inbox },
   { to: '/feedbacks', label: 'Feedbacks', icon: MessageSquare },
   { to: '/questionnaires', label: 'Questionnaires', icon: ListChecks },

@@ -138,6 +138,12 @@ export function Submissions() {
       social_tags: s.social_tags ?? [],
       is_indoor: s.is_indoor ?? false,
       is_outdoor: s.is_outdoor ?? true,
+      date_label: (s as any).date_label ?? '',
+      date_start: (s as any).date_start ?? '',
+      date_end: (s as any).date_end ?? '',
+      recurrence_type: (s as any).recurrence_type ?? '',
+      seasonal_months: (s as any).seasonal_months ?? [],
+      weekly_days: (s as any).weekly_days ?? [],
     });
     const { error: insErr } = await supabase.from('activities').insert(payload);
     if (insErr) {

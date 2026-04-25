@@ -55,6 +55,12 @@ export type ActivityFormValues = {
   social_tags: string[];
   is_indoor: boolean;
   is_outdoor: boolean;
+  date_label: string;
+  date_start: string;
+  date_end: string;
+  recurrence_type: '' | 'one_off' | 'weekly' | 'seasonal';
+  seasonal_months: number[];
+  weekly_days: number[];
 };
 
 export function emptyActivityForm(): ActivityFormValues {
@@ -74,6 +80,12 @@ export function emptyActivityForm(): ActivityFormValues {
     social_tags: [],
     is_indoor: false,
     is_outdoor: true,
+    date_label: '',
+    date_start: '',
+    date_end: '',
+    recurrence_type: '',
+    seasonal_months: [],
+    weekly_days: [],
   };
 }
 
@@ -98,10 +110,30 @@ export function activityToForm(a: Partial<Activity>): ActivityFormValues {
     social_tags: a.social_tags ?? [],
     is_indoor: a.is_indoor ?? false,
     is_outdoor: a.is_outdoor ?? true,
+    date_label: (a as any).date_label ?? '',
+    date_start: (a as any).date_start ?? '',
+    date_end: (a as any).date_end ?? '',
+    recurrence_type: ((a as any).recurrence_type ?? '') as ActivityFormValues['recurrence_type'],
+    seasonal_months: (a as any).seasonal_months ?? [],
+    weekly_days: (a as any).weekly_days ?? [],
   };
 }
 
 export function formToPayload(v: ActivityFormValues) {
+  const hasDateConstraint =
+    v.date_label.trim() !== '' ||
+    v.date_start !== '' ||
+    v.date_end !== '' ||
+    v.recurrence_type !== '' ||
+    v.seasonal_months.length > 0 ||
+    v.weekly_days.length > 0;
+
+  // Auto-coche "Horaires restreints" si une contrainte temporelle est définie
+  let features = v.features;
+  if (hasDateConstraint && !features.includes('Horaires restreints')) {
+    features = [...features, 'Horaires restreints'];
+  }
+
   return {
     title: v.title.trim(),
     location_name: v.location_name.trim(),
@@ -113,11 +145,17 @@ export function formToPayload(v: ActivityFormValues) {
     longitude: Number(v.longitude),
     duration_minutes: Math.round(Number(v.duration_hours) * 60),
     price_level: v.price_level,
-    features: v.features,
+    features,
     seasons: v.seasons,
     social_tags: v.social_tags,
     is_indoor: v.is_indoor,
     is_outdoor: v.is_outdoor,
+    date_label: v.date_label.trim() || null,
+    date_start: v.date_start || null,
+    date_end: v.date_end || null,
+    recurrence_type: v.recurrence_type || null,
+    seasonal_months: v.seasonal_months.length > 0 ? v.seasonal_months : null,
+    weekly_days: v.weekly_days.length > 0 ? v.weekly_days : null,
   };
 }
 
@@ -503,6 +541,132 @@ export function ActivityForm({
             </label>
           ))}
         </div>
+
+        {values.features.includes('Horaires restreints') && (
+          <div className="mt-3 space-y-3 rounded-lg border border-amber-200 bg-amber-50/50 p-3">
+            <div>
+              <label className="label">Description de la contrainte (affichée à l'utilisateur)</label>
+              <input
+                className="input"
+                type="text"
+                value={values.date_label}
+                onChange={(e) => update('date_label', e.target.value)}
+                placeholder='Ex: "6 au 8 août 2026", "Tous les samedis", "Mars à mai"'
+              />
+            </div>
+            <div>
+              <label className="label">Type de contrainte</label>
+              <select
+                className="input"
+                value={values.recurrence_type}
+                onChange={(e) => {
+                  const t = e.target.value as ActivityFormValues['recurrence_type'];
+                  update('recurrence_type', t);
+                  if (t !== 'seasonal') update('seasonal_months', []);
+                  if (t !== 'weekly') update('weekly_days', []);
+                  if (t !== 'one_off') {
+                    update('date_start', '');
+                    update('date_end', '');
+                  }
+                }}
+              >
+                <option value="">— (aucune)</option>
+                <option value="one_off">Événement ponctuel (dates précises)</option>
+                <option value="weekly">Récurrence hebdomadaire (jour(s) de la semaine)</option>
+                <option value="seasonal">Saisonnier (mois de l'année)</option>
+              </select>
+            </div>
+
+            {values.recurrence_type === 'one_off' && (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Date de début</label>
+                  <input
+                    className="input"
+                    type="date"
+                    value={values.date_start}
+                    onChange={(e) => update('date_start', e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="label">Date de fin</label>
+                  <input
+                    className="input"
+                    type="date"
+                    value={values.date_end}
+                    onChange={(e) => update('date_end', e.target.value)}
+                  />
+                </div>
+              </div>
+            )}
+
+            {values.recurrence_type === 'weekly' && (
+              <div>
+                <label className="label">Jour(s) de la semaine</label>
+                <div className="flex flex-wrap gap-2">
+                  {['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'].map((d, i) => (
+                    <label
+                      key={d}
+                      className={`cursor-pointer rounded-md border px-3 py-1 text-xs font-medium transition ${
+                        values.weekly_days.includes(i)
+                          ? 'border-brand-cyan bg-brand-cyan text-white'
+                          : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        className="hidden"
+                        checked={values.weekly_days.includes(i)}
+                        onChange={() => {
+                          const next = values.weekly_days.includes(i)
+                            ? values.weekly_days.filter((x) => x !== i)
+                            : [...values.weekly_days, i].sort();
+                          update('weekly_days', next);
+                        }}
+                      />
+                      {d}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {values.recurrence_type === 'seasonal' && (
+              <div>
+                <label className="label">Mois de l'année</label>
+                <div className="flex flex-wrap gap-2">
+                  {['Jan','Fév','Mar','Avr','Mai','Juin','Juil','Août','Sep','Oct','Nov','Déc'].map((m, i) => {
+                    const monthNum = i + 1;
+                    const active = values.seasonal_months.includes(monthNum);
+                    return (
+                      <label
+                        key={m}
+                        className={`cursor-pointer rounded-md border px-3 py-1 text-xs font-medium transition ${
+                          active
+                            ? 'border-brand-cyan bg-brand-cyan text-white'
+                            : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          className="hidden"
+                          checked={active}
+                          onChange={() => {
+                            const next = active
+                              ? values.seasonal_months.filter((x) => x !== monthNum)
+                              : [...values.seasonal_months, monthNum].sort((a, b) => a - b);
+                            update('seasonal_months', next);
+                          }}
+                        />
+                        {m}
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </fieldset>
 
       <fieldset>

@@ -5,6 +5,7 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 import { Login } from './pages/Login';
 import { Dashboard } from './pages/Dashboard';
 import { Activities } from './pages/Activities';
+import { Conditional } from './pages/Conditional';
 import { Submissions } from './pages/Submissions';
 import { Feedbacks } from './pages/Feedbacks';
 import { Questionnaires } from './pages/Questionnaires';
@@ -25,6 +26,7 @@ export default function App() {
         >
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/activities" element={<Activities />} />
+          <Route path="/conditional" element={<Conditional />} />
           <Route path="/submissions" element={<Submissions />} />
           <Route path="/feedbacks" element={<Feedbacks />} />
           <Route path="/questionnaires" element={<Questionnaires />} />
