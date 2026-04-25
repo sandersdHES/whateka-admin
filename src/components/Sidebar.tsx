@@ -3,6 +3,7 @@ import {
   LayoutDashboard,
   Calendar,
   CalendarClock,
+  KeyRound,
   RefreshCw,
   Inbox,
   MessageSquare,
@@ -23,6 +24,7 @@ const NAV = [
   { to: '/questionnaires', label: 'Questionnaires', icon: ListChecks },
   { to: '/stats', label: 'Statistiques', icon: BarChart3 },
   { to: '/users', label: 'Gestion utilisateurs', icon: Users, superAdmin: true },
+  { to: '/access', label: 'Accès bêta', icon: KeyRound, superAdmin: true },
 ];
 
 export function Sidebar() {

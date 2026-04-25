@@ -4,6 +4,7 @@ import { Layout } from './components/Layout';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { Login } from './pages/Login';
 import { Dashboard } from './pages/Dashboard';
+import { Access } from './pages/Access';
 import { Activities } from './pages/Activities';
 import { Conditional } from './pages/Conditional';
 import { Scheduled } from './pages/Scheduled';
@@ -30,6 +31,7 @@ export default function App() {
           <Route path="/conditional" element={<Conditional />} />
           <Route path="/scheduled" element={<Scheduled />} />
           <Route path="/submissions" element={<Submissions />} />
+          <Route path="/access" element={<Access />} />
           <Route path="/feedbacks" element={<Feedbacks />} />
           <Route path="/questionnaires" element={<Questionnaires />} />
           <Route
