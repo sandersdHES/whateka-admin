@@ -575,42 +575,50 @@ function WeeklyChart({
       </div>
       <div className="relative">
         {(() => {
-          const CHART_HEIGHT = 112; // px (≈ h-28)
+          const CHART_H = 120;
+          const BAR_W = 14;
+          const GAP = 4;
+          const TOTAL_W = weeks.length * (BAR_W + GAP) - GAP;
           return (
-            <div
-              className="flex items-end gap-[3px]"
-              style={{ height: `${CHART_HEIGHT}px` }}
+            <svg
+              width="100%"
+              height={CHART_H}
+              viewBox={`0 0 ${TOTAL_W} ${CHART_H}`}
+              preserveAspectRatio="none"
+              className="block"
             >
-              {weeks.map((w) => {
+              {weeks.map((w, i) => {
                 const ratio = max > 0 ? w.count / max : 0;
-                const heightPx = w.count > 0
-                  ? Math.max(10, Math.round(ratio * CHART_HEIGHT))
+                const h = w.count > 0
+                  ? Math.max(10, Math.round(ratio * CHART_H))
                   : 3;
+                const x = i * (BAR_W + GAP);
+                const y = CHART_H - h;
                 const isCurrent = w.weekIndex === currentWeekIdx;
+                const fill = isCurrent
+                  ? '#06b6d4'
+                  : w.count === 0
+                    ? '#e2e8f0'
+                    : '#34d399';
                 const tooltip = `S${w.weekIndex + 1} (${w.weekStart.toLocaleDateString('fr-CH', {
                   day: '2-digit',
                   month: 'short',
                 })}) — ${w.count} activité${w.count > 1 ? 's' : ''}`;
                 return (
-                  <div
+                  <rect
                     key={w.weekIndex}
-                    className="group relative flex-1"
-                    title={tooltip}
-                    style={{ height: `${heightPx}px` }}
+                    x={x}
+                    y={y}
+                    width={BAR_W}
+                    height={h}
+                    rx={2}
+                    fill={fill}
                   >
-                    <div
-                      className={`h-full w-full rounded-t-sm transition-colors ${
-                        isCurrent
-                          ? 'bg-brand-cyan'
-                          : w.count === 0
-                            ? 'bg-slate-200'
-                            : 'bg-emerald-400 group-hover:bg-emerald-500'
-                      }`}
-                    />
-                  </div>
+                    <title>{tooltip}</title>
+                  </rect>
                 );
               })}
-            </div>
+            </svg>
           );
         })()}
         <div className="mt-2 flex text-[10px] text-slate-400">
