@@ -22,12 +22,14 @@ export function Modal({ open, onClose, title, children, maxWidth = 'max-w-2xl' }
 
   return (
     <div
-      className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-slate-900/60 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[1000] flex items-start justify-center overflow-y-auto bg-slate-900/60 p-4 backdrop-blur-sm"
       onClick={onClose}
+      style={{ isolation: 'isolate' }}
     >
       <div
         className={`mt-8 w-full ${maxWidth} rounded-2xl bg-white shadow-2xl`}
         onClick={(e) => e.stopPropagation()}
+        style={{ isolation: 'isolate' }}
       >
         <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
           <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
