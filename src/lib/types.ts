@@ -6,9 +6,12 @@ export type Category =
   | 'adventure'
   | 'relax'
   | 'fun'
-  | 'event'
-  | 'institution';
+  | 'event';
 
+// Catégories sélectionnables par l'admin/utilisateur dans les formulaires.
+// 'institution' n'est PAS une catégorie utilisateur : c'est un tag interne
+// utilisé pour tracker les entités à mettre à jour régulièrement (clubs,
+// associations) — automatiquement classées comme 'event' pour l'utilisateur.
 export const CATEGORIES: { value: Category; label: string }[] = [
   { value: 'nature', label: 'Nature' },
   { value: 'culture', label: 'Culture' },
@@ -18,7 +21,6 @@ export const CATEGORIES: { value: Category; label: string }[] = [
   { value: 'relax', label: 'Détente' },
   { value: 'fun', label: 'Fun' },
   { value: 'event', label: 'Événement' },
-  { value: 'institution', label: 'Institution' },
 ];
 
 export const FEATURES = [
