@@ -10,7 +10,7 @@ import { ActivityForm, formToPayload } from '../components/ActivityForm';
 import { useAuth } from '../lib/auth';
 import { useToast } from '../components/Toast';
 
-type Tab = 'pending' | 'on_hold' | 'all';
+type Tab = 'pending' | 'on_hold' | 'institutions' | 'all';
 type SortKey = 'created_desc' | 'created_asc' | 'title_asc' | 'title_desc';
 
 const SORT_OPTIONS: { value: SortKey; label: string }[] = [
@@ -51,6 +51,10 @@ export function Submissions() {
     const base = rows.filter((r) => {
       if (tab === 'pending' && r.status !== 'pending') return false;
       if (tab === 'on_hold' && r.status !== 'on_hold') return false;
+      if (tab === 'institutions') {
+        const cats = (r.category ?? '').split(',').map((c) => c.trim().toLowerCase());
+        if (!cats.includes('institution')) return false;
+      }
       if (search && !r.title.toLowerCase().includes(search.toLowerCase())) return false;
       return true;
     });
@@ -78,6 +82,10 @@ export function Submissions() {
 
   const pendingCount = rows.filter((r) => r.status === 'pending').length;
   const onHoldCount = rows.filter((r) => r.status === 'on_hold').length;
+  const institutionsCount = rows.filter((r) => {
+    const cats = (r.category ?? '').split(',').map((c) => c.trim().toLowerCase());
+    return cats.includes('institution');
+  }).length;
 
   async function handleHold(s: ActivitySubmission) {
     const { error } = await supabase
@@ -144,6 +152,9 @@ export function Submissions() {
       recurrence_type: (s as any).recurrence_type ?? '',
       seasonal_months: (s as any).seasonal_months ?? [],
       weekly_days: (s as any).weekly_days ?? [],
+      update_frequency: (s as any).update_frequency ?? '',
+      next_update_at: (s as any).next_update_at ?? '',
+      update_notes: (s as any).update_notes ?? '',
     });
     const { error: insErr } = await supabase.from('activities').insert(payload);
     if (insErr) {
@@ -192,7 +203,7 @@ export function Submissions() {
 
       <div className="flex flex-wrap gap-3">
         <div className="inline-flex overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-slate-200">
-          {(['pending', 'on_hold', 'all'] as Tab[]).map((t) => (
+          {(['pending', 'on_hold', 'institutions', 'all'] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -204,7 +215,9 @@ export function Submissions() {
                 ? `Nouvelles (${pendingCount})`
                 : t === 'on_hold'
                   ? `En attente (${onHoldCount})`
-                  : 'Toutes'}
+                  : t === 'institutions'
+                    ? `Institutions (${institutionsCount})`
+                    : 'Toutes'}
             </button>
           ))}
         </div>

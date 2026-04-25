@@ -61,6 +61,9 @@ export type ActivityFormValues = {
   recurrence_type: '' | 'one_off' | 'weekly' | 'seasonal';
   seasonal_months: number[];
   weekly_days: number[];
+  update_frequency: '' | 'weekly' | 'monthly' | 'quarterly' | 'yearly' | 'before_season' | 'manual';
+  next_update_at: string;
+  update_notes: string;
 };
 
 export function emptyActivityForm(): ActivityFormValues {
@@ -86,6 +89,9 @@ export function emptyActivityForm(): ActivityFormValues {
     recurrence_type: '',
     seasonal_months: [],
     weekly_days: [],
+    update_frequency: '',
+    next_update_at: '',
+    update_notes: '',
   };
 }
 
@@ -116,6 +122,9 @@ export function activityToForm(a: Partial<Activity>): ActivityFormValues {
     recurrence_type: ((a as any).recurrence_type ?? '') as ActivityFormValues['recurrence_type'],
     seasonal_months: (a as any).seasonal_months ?? [],
     weekly_days: (a as any).weekly_days ?? [],
+    update_frequency: ((a as any).update_frequency ?? '') as ActivityFormValues['update_frequency'],
+    next_update_at: (a as any).next_update_at ?? '',
+    update_notes: (a as any).update_notes ?? '',
   };
 }
 
@@ -156,6 +165,9 @@ export function formToPayload(v: ActivityFormValues) {
     recurrence_type: v.recurrence_type || null,
     seasonal_months: v.seasonal_months.length > 0 ? v.seasonal_months : null,
     weekly_days: v.weekly_days.length > 0 ? v.weekly_days : null,
+    update_frequency: v.update_frequency || null,
+    next_update_at: v.next_update_at || null,
+    update_notes: v.update_notes.trim() || null,
   };
 }
 
@@ -659,6 +671,51 @@ export function ActivityForm({
             </div>
           </div>
         )}
+      </fieldset>
+
+      <fieldset>
+        <legend className="label">À tenir à jour (optionnel)</legend>
+        <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50/50 p-3">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <div>
+              <label className="label">Fréquence de mise à jour</label>
+              <select
+                className="input"
+                value={values.update_frequency}
+                onChange={(e) =>
+                  update('update_frequency', e.target.value as ActivityFormValues['update_frequency'])
+                }
+              >
+                <option value="">— (aucune)</option>
+                <option value="weekly">Hebdomadaire</option>
+                <option value="monthly">Mensuelle</option>
+                <option value="quarterly">Trimestrielle</option>
+                <option value="yearly">Annuelle</option>
+                <option value="before_season">2 semaines avant saison</option>
+                <option value="manual">Manuelle (à la demande)</option>
+              </select>
+            </div>
+            <div>
+              <label className="label">Prochaine mise à jour</label>
+              <input
+                className="input"
+                type="date"
+                value={values.next_update_at}
+                onChange={(e) => update('next_update_at', e.target.value)}
+              />
+            </div>
+          </div>
+          <div>
+            <label className="label">Notes de mise à jour (optionnel)</label>
+            <input
+              className="input"
+              type="text"
+              value={values.update_notes}
+              onChange={(e) => update('update_notes', e.target.value)}
+              placeholder="Ex: récupérer le calendrier officiel des matchs sur sfl.ch"
+            />
+          </div>
+        </div>
       </fieldset>
 
       <fieldset>

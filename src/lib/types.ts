@@ -6,7 +6,8 @@ export type Category =
   | 'adventure'
   | 'relax'
   | 'fun'
-  | 'event';
+  | 'event'
+  | 'institution';
 
 export const CATEGORIES: { value: Category; label: string }[] = [
   { value: 'nature', label: 'Nature' },
@@ -17,6 +18,7 @@ export const CATEGORIES: { value: Category; label: string }[] = [
   { value: 'relax', label: 'Détente' },
   { value: 'fun', label: 'Fun' },
   { value: 'event', label: 'Événement' },
+  { value: 'institution', label: 'Institution' },
 ];
 
 export const FEATURES = [
@@ -47,6 +49,7 @@ export const CATEGORY_COLORS: Record<string, string> = {
   relax: '#a78bfa',
   fun: '#ec4899',
   event: '#dc2626',
+  institution: '#475569',
 };
 
 export type Activity = {
