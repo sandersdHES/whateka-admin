@@ -69,7 +69,12 @@ function isProposableNow(a: ConditionalActivity, now: Date): boolean {
     end.setHours(23, 59, 59, 999);
     if (now > end) return false;
     const dur = durationDays(a.date_start!, a.date_end!) ?? 0;
-    if (dur <= 7) {
+    if (dur <= 1) {
+      // v27 : 1-jour -> 5 jours avant + jour J
+      const w = new Date(end);
+      w.setDate(w.getDate() - 5);
+      if (now < w) return false;
+    } else if (dur <= 7) {
       const w = new Date(end);
       w.setDate(w.getDate() - 21);
       if (now < w) return false;
