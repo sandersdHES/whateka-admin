@@ -9,9 +9,13 @@ import {
   Layers,
   MapPin,
   Pencil,
+  Save,
   Search,
   X,
 } from 'lucide-react';
+import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import { supabase } from '../lib/supabase';
 import type { ActivitySubmission } from '../lib/types';
 import { categoryLabel, formatDate, formatDuration, formatPrice } from '../lib/format';
@@ -140,7 +144,6 @@ export function Submissions() {
   }
 
   async function handleApprove(s: ActivitySubmission) {
-    if (!confirm(`Approuver « ${s.title} » ? Elle sera copiée dans les activités publiques.`)) return;
     const payload = formToPayload({
       title: s.title,
       location_name: s.location_name,
@@ -292,6 +295,17 @@ export function Submissions() {
           onReopen={handleReopen}
           onReject={(s) => setRejecting(s)}
           onEdit={(s) => setEditing(s)}
+          onLocationChange={async (s, lat, lng) => {
+            const { error } = await supabase
+              .from('activity_submissions')
+              .update({ latitude: lat, longitude: lng })
+              .eq('id', s.id);
+            if (error) toast.error(error.message);
+            else {
+              toast.success('Localisation mise à jour.');
+              await load();
+            }
+          }}
         />
       ) : (
         <div className="overflow-hidden rounded-2xl bg-white shadow-soft ring-1 ring-slate-100">
@@ -466,6 +480,23 @@ export function Submissions() {
 // + bouton éditer + flèches pour skip sans action.
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Icone marker custom (leaflet par defaut casse avec Vite)
+const _cardMarkerIcon = L.divIcon({
+  html: '<div style="width:26px;height:26px;background:#FF6F61;border:3px solid white;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,.4);"></div>',
+  className: '',
+  iconSize: [26, 26],
+  iconAnchor: [13, 13],
+});
+
+function _CardMapClick({ onPick }: { onPick: (lat: number, lng: number) => void }) {
+  useMapEvents({
+    click(e) {
+      onPick(e.latlng.lat, e.latlng.lng);
+    },
+  });
+  return null;
+}
+
 function CardDeck({
   submissions,
   index,
@@ -475,6 +506,7 @@ function CardDeck({
   onReopen,
   onReject,
   onEdit,
+  onLocationChange,
 }: {
   submissions: ActivitySubmission[];
   index: number;
@@ -484,7 +516,14 @@ function CardDeck({
   onReopen: (s: ActivitySubmission) => void;
   onReject: (s: ActivitySubmission) => void;
   onEdit: (s: ActivitySubmission) => void;
+  onLocationChange: (s: ActivitySubmission, lat: number, lng: number) => void;
 }) {
+  const [pendingCoords, setPendingCoords] = useState<{ lat: number; lng: number } | null>(null);
+
+  // Reset les coords pendantes a chaque changement de carte
+  useEffect(() => {
+    setPendingCoords(null);
+  }, [index, submissions]);
   const safeIndex = Math.min(index, submissions.length - 1);
   const s = submissions[safeIndex];
   if (!s) return null;
@@ -633,6 +672,59 @@ function CardDeck({
               ))}
             </div>
           )}
+
+          {/* Map editable : clic pour changer la localisation */}
+          <div className="mt-5">
+            <div className="mb-1.5 flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-700">
+                Localisation {pendingCoords && <span className="ml-1 text-amber-600">(modifiée)</span>}
+              </span>
+              <span className="text-[11px] text-slate-500">
+                {(pendingCoords?.lat ?? s.latitude).toFixed(5)}, {(pendingCoords?.lng ?? s.longitude).toFixed(5)}
+              </span>
+            </div>
+            <div className="overflow-hidden rounded-xl ring-1 ring-slate-200" style={{ height: 220 }}>
+              <MapContainer
+                key={s.id}
+                center={[pendingCoords?.lat ?? s.latitude, pendingCoords?.lng ?? s.longitude]}
+                zoom={13}
+                scrollWheelZoom={false}
+                style={{ height: '100%', width: '100%' }}
+              >
+                <TileLayer
+                  attribution='&copy; OpenStreetMap'
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                />
+                <Marker
+                  position={[pendingCoords?.lat ?? s.latitude, pendingCoords?.lng ?? s.longitude]}
+                  icon={_cardMarkerIcon}
+                />
+                <_CardMapClick onPick={(lat, lng) => setPendingCoords({ lat, lng })} />
+              </MapContainer>
+            </div>
+            <p className="mt-1 text-[11px] text-slate-500">
+              Clique sur la carte pour ajuster la position du marqueur.
+            </p>
+            {pendingCoords && (
+              <div className="mt-2 flex gap-2">
+                <button
+                  onClick={() => {
+                    onLocationChange(s, pendingCoords.lat, pendingCoords.lng);
+                    setPendingCoords(null);
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-600"
+                >
+                  <Save size={13} /> Enregistrer la nouvelle position
+                </button>
+                <button
+                  onClick={() => setPendingCoords(null)}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-200"
+                >
+                  Annuler
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
