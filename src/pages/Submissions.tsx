@@ -50,6 +50,7 @@ export function Submissions() {
   const [rejectNote, setRejectNote] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('table');
   const [cardIndex, setCardIndex] = useState(0);
+  const [locating, setLocating] = useState<ActivitySubmission | null>(null);
   const { adminProfile } = useAuth();
   const toast = useToast();
 
@@ -381,6 +382,13 @@ export function Submissions() {
                         </a>
                       )}
                       <button
+                        onClick={() => setLocating(s)}
+                        className="rounded-md p-2 text-slate-500 hover:bg-brand-cyan/10 hover:text-brand-cyan"
+                        title="Vérifier / corriger la localisation"
+                      >
+                        <MapPin size={16} />
+                      </button>
+                      <button
                         onClick={() => setEditing(s)}
                         className="rounded-md p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
                         title="Éditer"
@@ -525,6 +533,33 @@ export function Submissions() {
               </button>
             </div>
           </div>
+        )}
+      </Modal>
+
+      {/* Modal localisation : vérifier / re-géocoder / corriger via carte */}
+      <Modal
+        open={locating !== null}
+        onClose={() => setLocating(null)}
+        title="Localisation"
+        maxWidth="max-w-3xl"
+      >
+        {locating && (
+          <LocationEditor
+            submission={locating}
+            onClose={() => setLocating(null)}
+            onSave={async (lat, lng) => {
+              const { error } = await supabase
+                .from('activity_submissions')
+                .update({ latitude: lat, longitude: lng })
+                .eq('id', locating.id);
+              if (error) toast.error(error.message);
+              else {
+                toast.success('Localisation mise à jour.');
+                setLocating(null);
+                await load();
+              }
+            }}
+          />
         )}
       </Modal>
     </div>
@@ -936,6 +971,130 @@ function Meta({ label, value }: { label: string; value: string }) {
         {label}
       </div>
       <div className="mt-0.5 font-medium text-slate-700">{value}</div>
+    </div>
+  );
+}
+
+/**
+ * Modal pour vérifier/corriger la localisation d'une soumission.
+ * - Map cliquable pour ajuster manuellement
+ * - Bouton "Re-géocoder automatiquement" qui appelle geocode-place
+ *   avec titre + lieu pour proposer de nouvelles coordonnées
+ */
+function LocationEditor({
+  submission,
+  onSave,
+  onClose,
+}: {
+  submission: ActivitySubmission;
+  onSave: (lat: number, lng: number) => void | Promise<void>;
+  onClose: () => void;
+}) {
+  const [coords, setCoords] = useState({ lat: submission.latitude, lng: submission.longitude });
+  const [geocoding, setGeocoding] = useState(false);
+  const [geocodeMsg, setGeocodeMsg] = useState<string | null>(null);
+  const original = { lat: submission.latitude, lng: submission.longitude };
+  const changed = coords.lat !== original.lat || coords.lng !== original.lng;
+
+  async function autoGeocode() {
+    setGeocoding(true);
+    setGeocodeMsg(null);
+    try {
+      const { data, error } = await supabase.functions.invoke<{
+        lat?: number;
+        lng?: number;
+        display_name?: string;
+        error?: string;
+      }>('geocode-place', {
+        body: { query: `${submission.title} ${submission.location_name} Switzerland` },
+      });
+      if (error || !data?.lat || !data?.lng) {
+        setGeocodeMsg('Aucun résultat trouvé via Google Places.');
+      } else {
+        setCoords({ lat: data.lat, lng: data.lng });
+        setGeocodeMsg(`Trouvé : ${data.display_name ?? ''}`);
+      }
+    } catch (_e) {
+      setGeocodeMsg('Erreur durant le géocodage.');
+    } finally {
+      setGeocoding(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-lg bg-slate-50 p-3 text-sm">
+        <div className="font-semibold text-slate-900">{submission.title}</div>
+        <div className="text-xs text-slate-600">{submission.location_name}</div>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div className="flex items-center gap-3">
+          <span className="font-semibold text-slate-700">Coordonnées :</span>
+          <span className={changed ? 'text-amber-600' : 'text-slate-600'}>
+            {coords.lat.toFixed(5)}, {coords.lng.toFixed(5)}
+          </span>
+          {changed && <span className="text-amber-600">(modifiées)</span>}
+        </div>
+        <button
+          onClick={autoGeocode}
+          disabled={geocoding}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-brand-cyan bg-brand-cyan/10 px-3 py-1.5 text-xs font-semibold text-brand-cyan hover:bg-brand-cyan/20 disabled:opacity-50"
+        >
+          {geocoding ? (
+            <>
+              <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-brand-cyan border-t-transparent" />
+              Recherche…
+            </>
+          ) : (
+            <>
+              <Sparkles size={13} />
+              Re-géocoder automatiquement
+            </>
+          )}
+        </button>
+      </div>
+
+      {geocodeMsg && (
+        <div className="rounded-md bg-emerald-50 px-3 py-2 text-xs text-emerald-800 ring-1 ring-emerald-200">
+          {geocodeMsg}
+        </div>
+      )}
+
+      <div className="overflow-hidden rounded-xl ring-1 ring-slate-200" style={{ height: 380 }}>
+        <MapContainer
+          key={`${submission.id}-${coords.lat}-${coords.lng}`}
+          center={[coords.lat, coords.lng]}
+          zoom={14}
+          scrollWheelZoom={true}
+          style={{ height: '100%', width: '100%' }}
+        >
+          <TileLayer
+            attribution='&copy; OpenStreetMap'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          />
+          <Marker position={[coords.lat, coords.lng]} icon={_cardMarkerIcon} />
+          <_CardMapClick onPick={(lat, lng) => setCoords({ lat, lng })} />
+        </MapContainer>
+      </div>
+      <p className="text-xs text-slate-500">
+        Clique sur la carte pour ajuster manuellement ou utilise le bouton ci-dessus pour
+        re-géocoder via Google Places.
+      </p>
+
+      <div className="flex justify-end gap-2 border-t border-slate-100 pt-3">
+        <button onClick={onClose} className="btn-ghost">
+          Fermer
+        </button>
+        <button
+          onClick={() => onSave(coords.lat, coords.lng)}
+          disabled={!changed}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-600 disabled:opacity-50"
+        >
+          <Save size={14} />
+          Enregistrer
+        </button>
+      </div>
     </div>
   );
 }
