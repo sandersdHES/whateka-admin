@@ -443,6 +443,49 @@ export function Submissions() {
             onSubmit={handleSave}
             onCancel={() => setEditing(null)}
             submitLabel="Mettre à jour"
+            extraActions={
+              editing.status === 'pending' || editing.status === 'on_hold'
+                ? [
+                    {
+                      label: 'Approuver',
+                      color: 'emerald',
+                      icon: <Check size={16} />,
+                      onClick: async () => {
+                        await handleApprove(editing);
+                        setEditing(null);
+                      },
+                    },
+                    editing.status === 'pending'
+                      ? {
+                          label: 'Mettre en attente',
+                          color: 'amber',
+                          icon: <Clock size={16} />,
+                          onClick: async () => {
+                            await handleHold(editing);
+                            setEditing(null);
+                          },
+                        }
+                      : {
+                          label: 'Remettre dans les nouvelles',
+                          color: 'sky',
+                          icon: <Clock size={16} />,
+                          onClick: async () => {
+                            await handleReopen(editing);
+                            setEditing(null);
+                          },
+                        },
+                    {
+                      label: 'Rejeter',
+                      color: 'rose',
+                      icon: <X size={16} />,
+                      onClick: () => {
+                        setRejecting(editing);
+                        setEditing(null);
+                      },
+                    },
+                  ]
+                : undefined
+            }
           />
         )}
       </Modal>

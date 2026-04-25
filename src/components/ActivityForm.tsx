@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, ReactNode, useEffect, useState } from 'react';
 import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -189,11 +189,28 @@ function validate(v: ActivityFormValues): string | null {
   return null;
 }
 
+export type ExtraAction = {
+  label: string;
+  icon?: ReactNode;
+  color: 'emerald' | 'amber' | 'rose' | 'sky';
+  /**
+   * Appelé après la sauvegarde réussie du formulaire. Reçoit les valeurs.
+   * Si rejette, l'action n'est pas executée mais le save est conserve.
+   */
+  onClick: (values: ActivityFormValues) => Promise<void> | void;
+};
+
 type Props = {
   initial?: Partial<Activity>;
   submitLabel?: string;
   onSubmit: (values: ActivityFormValues) => Promise<void> | void;
   onCancel?: () => void;
+  /**
+   * Actions additionnelles affichees dans le footer du formulaire
+   * (ex: Approuver / Mettre en attente / Rejeter pour les soumissions).
+   * Chaque action sauvegarde d'abord les valeurs puis execute son callback.
+   */
+  extraActions?: ExtraAction[];
 };
 
 export function ActivityForm({
@@ -201,6 +218,7 @@ export function ActivityForm({
   submitLabel = 'Enregistrer',
   onSubmit,
   onCancel,
+  extraActions,
 }: Props) {
   const [values, setValues] = useState<ActivityFormValues>(emptyActivityForm());
   const [error, setError] = useState<string | null>(null);
@@ -289,6 +307,21 @@ export function ActivityForm({
       await onSubmit(values);
     } catch (ex: unknown) {
       setError(ex instanceof Error ? ex.message : 'Erreur lors de la sauvegarde.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleExtraAction(action: ExtraAction) {
+    const err = validate(values);
+    if (err) return setError(err);
+    setError(null);
+    setBusy(true);
+    try {
+      await onSubmit(values);
+      await action.onClick(values);
+    } catch (ex: unknown) {
+      setError(ex instanceof Error ? ex.message : 'Erreur lors de l\'action.');
     } finally {
       setBusy(false);
     }
@@ -776,15 +809,41 @@ export function ActivityForm({
         </div>
       </fieldset>
 
-      <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+      <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-4">
         {onCancel && (
-          <button type="button" onClick={onCancel} className="btn-ghost">
+          <button type="button" onClick={onCancel} className="btn-ghost" disabled={busy}>
             Annuler
           </button>
         )}
         <button type="submit" className="btn-primary" disabled={busy}>
           {busy ? 'Enregistrement...' : submitLabel}
         </button>
+        {extraActions && extraActions.length > 0 && (
+          <>
+            <div className="hidden h-9 w-px bg-slate-200 sm:block" />
+            {extraActions.map((a, i) => {
+              const colorMap: Record<ExtraAction['color'], string> = {
+                emerald:
+                  'bg-emerald-500 hover:bg-emerald-600 text-white shadow-sm',
+                amber: 'bg-amber-500 hover:bg-amber-600 text-white shadow-sm',
+                rose: 'bg-rose-500 hover:bg-rose-600 text-white shadow-sm',
+                sky: 'bg-sky-500 hover:bg-sky-600 text-white shadow-sm',
+              };
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => handleExtraAction(a)}
+                  disabled={busy}
+                  className={`inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold transition disabled:opacity-50 ${colorMap[a.color]}`}
+                >
+                  {a.icon}
+                  {a.label}
+                </button>
+              );
+            })}
+          </>
+        )}
       </div>
     </form>
   );
