@@ -1,8 +1,20 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Check, Clock, ExternalLink, Pencil, Search, X } from 'lucide-react';
+import {
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  ExternalLink,
+  LayoutGrid,
+  Layers,
+  MapPin,
+  Pencil,
+  Search,
+  X,
+} from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { ActivitySubmission } from '../lib/types';
-import { categoryLabel, formatDate, formatDuration } from '../lib/format';
+import { categoryLabel, formatDate, formatDuration, formatPrice } from '../lib/format';
 import { Loader } from '../components/ui/Loader';
 import { EmptyState } from '../components/ui/EmptyState';
 import { Modal } from '../components/Modal';
@@ -12,6 +24,7 @@ import { useToast } from '../components/Toast';
 
 type Tab = 'pending' | 'on_hold' | 'tracked' | 'all';
 type SortKey = 'created_desc' | 'created_asc' | 'title_asc' | 'title_desc';
+type ViewMode = 'table' | 'cards';
 
 const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: 'created_desc', label: 'Plus récentes' },
@@ -29,6 +42,8 @@ export function Submissions() {
   const [editing, setEditing] = useState<ActivitySubmission | null>(null);
   const [rejecting, setRejecting] = useState<ActivitySubmission | null>(null);
   const [rejectNote, setRejectNote] = useState('');
+  const [viewMode, setViewMode] = useState<ViewMode>('table');
+  const [cardIndex, setCardIndex] = useState(0);
   const { adminProfile } = useAuth();
   const toast = useToast();
 
@@ -238,12 +253,46 @@ export function Submissions() {
             </option>
           ))}
         </select>
+        <div className="inline-flex overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-slate-200">
+          <button
+            onClick={() => setViewMode('table')}
+            className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium ${
+              viewMode === 'table' ? 'bg-brand-cyan text-white' : 'text-slate-700 hover:bg-slate-50'
+            }`}
+            title="Vue tableau"
+          >
+            <LayoutGrid size={14} /> Tableau
+          </button>
+          <button
+            onClick={() => {
+              setViewMode('cards');
+              setCardIndex(0);
+            }}
+            className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium ${
+              viewMode === 'cards' ? 'bg-brand-cyan text-white' : 'text-slate-700 hover:bg-slate-50'
+            }`}
+            title="Vue cartes (style Tinder)"
+          >
+            <Layers size={14} /> Cartes
+          </button>
+        </div>
       </div>
 
       {loading ? (
         <Loader />
       ) : filtered.length === 0 ? (
         <EmptyState title="Aucune soumission" description="Rien à traiter pour le moment." />
+      ) : viewMode === 'cards' ? (
+        <CardDeck
+          submissions={filtered}
+          index={cardIndex}
+          onIndexChange={setCardIndex}
+          onApprove={handleApprove}
+          onHold={handleHold}
+          onReopen={handleReopen}
+          onReject={(s) => setRejecting(s)}
+          onEdit={(s) => setEditing(s)}
+        />
       ) : (
         <div className="overflow-hidden rounded-2xl bg-white shadow-soft ring-1 ring-slate-100">
           <table className="w-full text-sm">
@@ -407,6 +456,249 @@ export function Submissions() {
           </div>
         )}
       </Modal>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CardDeck : vue Tinder-style pour parcourir les soumissions une par une.
+// 3 boutons en bas : Rejeter / Mettre en attente / Approuver
+// + bouton éditer + flèches pour skip sans action.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function CardDeck({
+  submissions,
+  index,
+  onIndexChange,
+  onApprove,
+  onHold,
+  onReopen,
+  onReject,
+  onEdit,
+}: {
+  submissions: ActivitySubmission[];
+  index: number;
+  onIndexChange: (i: number) => void;
+  onApprove: (s: ActivitySubmission) => void;
+  onHold: (s: ActivitySubmission) => void;
+  onReopen: (s: ActivitySubmission) => void;
+  onReject: (s: ActivitySubmission) => void;
+  onEdit: (s: ActivitySubmission) => void;
+}) {
+  const safeIndex = Math.min(index, submissions.length - 1);
+  const s = submissions[safeIndex];
+  if (!s) return null;
+
+  const cats = (s.category ?? '').split(',').map((c) => c.trim().toLowerCase()).filter(Boolean);
+  const statusLabel =
+    s.status === 'pending'
+      ? 'Nouvelle'
+      : s.status === 'on_hold'
+        ? 'En attente'
+        : s.status === 'approved'
+          ? 'Approuvée'
+          : 'Rejetée';
+  const statusCls =
+    s.status === 'pending'
+      ? 'bg-sky-100 text-sky-800'
+      : s.status === 'on_hold'
+        ? 'bg-amber-100 text-amber-800'
+        : s.status === 'approved'
+          ? 'bg-emerald-100 text-emerald-800'
+          : 'bg-rose-100 text-rose-800';
+
+  const next = (delta: number) => {
+    const newIdx = Math.max(0, Math.min(submissions.length - 1, safeIndex + delta));
+    onIndexChange(newIdx);
+  };
+  const advance = () => next(1);
+
+  const isActive = s.status === 'pending' || s.status === 'on_hold';
+
+  return (
+    <div className="flex flex-col items-center gap-4">
+      {/* Compteur + skip arrows */}
+      <div className="flex w-full max-w-2xl items-center justify-between">
+        <button
+          onClick={() => next(-1)}
+          disabled={safeIndex === 0}
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-slate-600 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-50 disabled:opacity-30"
+          title="Précédent"
+        >
+          <ChevronLeft size={18} />
+        </button>
+        <div className="text-sm font-medium text-slate-600">
+          {safeIndex + 1} <span className="text-slate-400">/ {submissions.length}</span>
+        </div>
+        <button
+          onClick={() => next(1)}
+          disabled={safeIndex >= submissions.length - 1}
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-slate-600 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-50 disabled:opacity-30"
+          title="Suivant (sans action)"
+        >
+          <ChevronRight size={18} />
+        </button>
+      </div>
+
+      {/* Card */}
+      <div className="relative w-full max-w-2xl overflow-hidden rounded-3xl bg-white shadow-xl ring-1 ring-slate-200/60">
+        {/* Image */}
+        <div className="relative h-72 w-full bg-slate-100">
+          {s.image_url ? (
+            <img
+              key={s.id}
+              src={s.image_url}
+              alt={s.title}
+              className="h-full w-full object-cover"
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).style.display = 'none';
+              }}
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-sm text-slate-400">
+              Aucune image
+            </div>
+          )}
+          {/* Status badge */}
+          <span
+            className={`badge absolute right-4 top-4 ${statusCls} backdrop-blur-sm`}
+          >
+            {statusLabel}
+          </span>
+          {/* Categories */}
+          <div className="absolute bottom-3 left-3 flex flex-wrap gap-1.5">
+            {cats.map((c) => (
+              <span
+                key={c}
+                className="rounded-full bg-white/90 px-2.5 py-1 text-xs font-semibold text-slate-700 backdrop-blur-sm"
+              >
+                {categoryLabel(c)}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        {/* Body */}
+        <div className="p-6">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <h3 className="text-xl font-bold text-slate-900">{s.title}</h3>
+              <div className="mt-1 flex items-center gap-1 text-sm text-slate-500">
+                <MapPin size={14} />
+                <span>{s.location_name}</span>
+              </div>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              {s.activity_url && (
+                <a
+                  href={s.activity_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-md p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                  title="Ouvrir le site"
+                >
+                  <ExternalLink size={16} />
+                </a>
+              )}
+              <button
+                onClick={() => onEdit(s)}
+                className="rounded-md p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                title="Éditer"
+              >
+                <Pencil size={16} />
+              </button>
+            </div>
+          </div>
+
+          {s.description && (
+            <p className="mt-3 text-sm leading-relaxed text-slate-600">{s.description}</p>
+          )}
+
+          <div className="mt-4 grid grid-cols-2 gap-3 text-xs md:grid-cols-4">
+            <Meta label="Durée" value={formatDuration(s.duration_minutes)} />
+            <Meta label="Prix" value={formatPrice(s.price_level)} />
+            <Meta label="Soumis le" value={formatDate(s.created_at)} />
+            <Meta label="Indoor / Outdoor" value={`${s.is_indoor ? 'Indoor' : ''}${s.is_indoor && s.is_outdoor ? ' · ' : ''}${s.is_outdoor ? 'Outdoor' : ''}` || '—'} />
+          </div>
+
+          {(s.features ?? []).length > 0 && (
+            <div className="mt-4 flex flex-wrap gap-1.5">
+              {(s.features ?? []).map((f) => (
+                <span
+                  key={f}
+                  className="rounded-md bg-slate-100 px-2 py-1 text-xs text-slate-700"
+                >
+                  {f}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 3 boutons d'action */}
+      {isActive ? (
+        <div className="flex items-center justify-center gap-6">
+          <button
+            onClick={() => {
+              onReject(s);
+              advance();
+            }}
+            className="flex h-16 w-16 items-center justify-center rounded-full bg-rose-500 text-white shadow-lg ring-4 ring-rose-100 transition hover:scale-105 hover:bg-rose-600 active:scale-95"
+            title="Rejeter"
+          >
+            <X size={28} />
+          </button>
+          {s.status === 'pending' ? (
+            <button
+              onClick={() => {
+                onHold(s);
+                advance();
+              }}
+              className="flex h-14 w-14 items-center justify-center rounded-full bg-amber-500 text-white shadow-lg ring-4 ring-amber-100 transition hover:scale-105 hover:bg-amber-600 active:scale-95"
+              title="Mettre en attente"
+            >
+              <Clock size={22} />
+            </button>
+          ) : (
+            <button
+              onClick={() => {
+                onReopen(s);
+                advance();
+              }}
+              className="flex h-14 w-14 items-center justify-center rounded-full bg-sky-500 text-white shadow-lg ring-4 ring-sky-100 transition hover:scale-105 hover:bg-sky-600 active:scale-95"
+              title="Remettre dans les nouvelles"
+            >
+              <Clock size={22} />
+            </button>
+          )}
+          <button
+            onClick={() => {
+              onApprove(s);
+              advance();
+            }}
+            className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500 text-white shadow-lg ring-4 ring-emerald-100 transition hover:scale-105 hover:bg-emerald-600 active:scale-95"
+            title="Approuver"
+          >
+            <Check size={28} />
+          </button>
+        </div>
+      ) : (
+        <div className="rounded-lg bg-slate-50 px-4 py-2 text-xs text-slate-500 ring-1 ring-slate-200">
+          Cette soumission est déjà {s.status === 'approved' ? 'approuvée' : 'rejetée'} — utilise les flèches pour passer à la suivante.
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Meta({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+        {label}
+      </div>
+      <div className="mt-0.5 font-medium text-slate-700">{value}</div>
     </div>
   );
 }
