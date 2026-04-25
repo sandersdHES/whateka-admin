@@ -148,7 +148,14 @@ export function Conditional() {
   const [editing, setEditing] = useState<ConditionalActivity | null>(null);
   const toast = useToast();
 
-  const now = useMemo(() => new Date(), []);
+  // `now` rafraichi chaque minute pour que les statuts "Proposee maintenant"
+  // / "Echue" se mettent a jour automatiquement si l'admin laisse l'onglet
+  // ouvert plusieurs heures (sinon `now` figait au mount).
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const interval = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(interval);
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);

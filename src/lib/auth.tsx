@@ -32,9 +32,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
     async function loadProfile() {
       if (!session?.user?.email) {
-        setAdminProfile(null);
+        if (!cancelled) setAdminProfile(null);
         return;
       }
       const { data } = await supabase
@@ -42,9 +43,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .select('id,email,name,role,created_at')
         .eq('email', session.user.email)
         .maybeSingle();
-      setAdminProfile((data as AdminUser) ?? null);
+      // Garde anti race-condition : si une session a change pendant le fetch,
+      // on n'ecrase pas le nouveau profil avec le resultat de l'ancienne session.
+      if (!cancelled) setAdminProfile((data as AdminUser) ?? null);
     }
     loadProfile();
+    return () => {
+      cancelled = true;
+    };
   }, [session?.user?.email]);
 
   const signIn: AuthState['signIn'] = async (email, password) => {

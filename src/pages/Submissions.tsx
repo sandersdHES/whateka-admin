@@ -183,20 +183,35 @@ export function Submissions() {
     // Garde-fou : vérifie qu'aucune activité similaire n'existe déjà
     // (triangulation titre + lieu + URL, 2/3 critères suffisent).
     try {
-      const { data } = await supabase.functions.invoke<{ matches?: any[] }>('detect-duplicate', {
+      const { data, error } = await supabase.functions.invoke<{ matches?: any[] }>('detect-duplicate', {
         body: {
           title: s.title,
           location_name: s.location_name,
           activity_url: s.activity_url,
         },
       });
-      const matches = data?.matches ?? [];
-      if (matches.length > 0) {
-        setDuplicateCheck({ submission: s, matches });
-        return; // L'admin doit choisir avant que l'approbation ait lieu
+      if (error) {
+        // Important : ne PAS continuer aveuglément. Si le détecteur échoue,
+        // on demande explicitement à l'admin de confirmer.
+        console.error('detect-duplicate failed', error);
+        toast.error(`Détecteur de doublons indisponible (${error.message ?? 'erreur'}). Approuver quand même ?`);
+        // On bloque l'approbation jusqu'à action explicite
+        if (!confirm(`⚠️ Le détecteur de doublons est en panne.\n\nApprouver « ${s.title} » sans cette vérification ?`)) {
+          return;
+        }
+      } else {
+        const matches = data?.matches ?? [];
+        if (matches.length > 0) {
+          setDuplicateCheck({ submission: s, matches });
+          return; // L'admin doit choisir avant que l'approbation ait lieu
+        }
       }
-    } catch (_e) {
-      // En cas d'erreur du detecteur, on continue (garde-fou non bloquant)
+    } catch (e) {
+      console.error('detect-duplicate threw', e);
+      toast.error('Erreur réseau sur le détecteur de doublons.');
+      if (!confirm(`⚠️ Erreur réseau lors de la vérification des doublons.\n\nApprouver « ${s.title} » quand même ?`)) {
+        return;
+      }
     }
     await performApprove(s);
   }
@@ -1032,7 +1047,7 @@ function CardDeck({
                 Localisation {pendingCoords && <span className="ml-1 text-amber-600">(modifiée)</span>}
               </span>
               <span className="text-[11px] text-slate-500">
-                {(pendingCoords?.lat ?? s.latitude).toFixed(5)}, {(pendingCoords?.lng ?? s.longitude).toFixed(5)}
+                {(pendingCoords?.lat ?? s.latitude ?? 0).toFixed(5)}, {(pendingCoords?.lng ?? s.longitude ?? 0).toFixed(5)}
               </span>
             </div>
             {/* Gros bouton "Localiser avec l'IA" sur toute la largeur */}
@@ -1041,23 +1056,27 @@ function CardDeck({
               onResult={(lat, lng) => setPendingCoords({ lat, lng })}
             />
             <div className="overflow-hidden rounded-xl ring-1 ring-slate-200" style={{ height: 220 }}>
-              <MapContainer
-                key={s.id}
-                center={[pendingCoords?.lat ?? s.latitude, pendingCoords?.lng ?? s.longitude]}
-                zoom={13}
-                scrollWheelZoom={false}
-                style={{ height: '100%', width: '100%' }}
-              >
-                <TileLayer
-                  attribution='&copy; OpenStreetMap'
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                />
-                <Marker
-                  position={[pendingCoords?.lat ?? s.latitude, pendingCoords?.lng ?? s.longitude]}
-                  icon={_cardMarkerIcon}
-                />
-                <_CardMapClick onPick={(lat, lng) => setPendingCoords({ lat, lng })} />
-              </MapContainer>
+              {(() => {
+                // Fallback Lausanne si coords nulles (Leaflet plante sinon).
+                const lat = pendingCoords?.lat ?? s.latitude ?? 46.5197;
+                const lng = pendingCoords?.lng ?? s.longitude ?? 6.6323;
+                return (
+                  <MapContainer
+                    key={s.id}
+                    center={[lat, lng]}
+                    zoom={13}
+                    scrollWheelZoom={false}
+                    style={{ height: '100%', width: '100%' }}
+                  >
+                    <TileLayer
+                      attribution='&copy; OpenStreetMap'
+                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    />
+                    <Marker position={[lat, lng]} icon={_cardMarkerIcon} />
+                    <_CardMapClick onPick={(la, ln) => setPendingCoords({ lat: la, lng: ln })} />
+                  </MapContainer>
+                );
+              })()}
             </div>
             <p className="mt-1 text-[11px] text-slate-500">
               Clique sur la carte pour ajuster la position du marqueur.

@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useState, ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, ReactNode } from 'react';
 import { X } from 'lucide-react';
 
 type Toast = { id: number; kind: 'error' | 'success' | 'info'; message: string };
@@ -12,18 +12,39 @@ const ToastCtx = createContext<Ctx | undefined>(undefined);
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
+  // Tracking des timers pour pouvoir les clear au unmount (fix fuite mineure).
+  const timersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
 
   const push = useCallback<Ctx['push']>((kind, message) => {
     const id = Date.now() + Math.random();
     setToasts((t) => [...t, { id, kind, message }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 5000);
+    const timer = setTimeout(() => {
+      setToasts((t) => t.filter((x) => x.id !== id));
+      timersRef.current.delete(timer);
+    }, 5000);
+    timersRef.current.add(timer);
   }, []);
 
-  const value: Ctx = {
-    push,
-    error: (m) => push('error', m),
-    success: (m) => push('success', m),
-  };
+  // Cleanup au unmount du provider (cas rare mais propre)
+  useEffect(() => {
+    const timers = timersRef.current;
+    return () => {
+      timers.forEach((t) => clearTimeout(t));
+      timers.clear();
+    };
+  }, []);
+
+  // useMemo : evite que les consumers re-render a chaque render parent.
+  // Avant : value etait un nouvel objet a chaque render -> tous les useEffect
+  // dependant de toast/useToast() se re-declenchaient.
+  const value = useMemo<Ctx>(
+    () => ({
+      push,
+      error: (m: string) => push('error', m),
+      success: (m: string) => push('success', m),
+    }),
+    [push],
+  );
 
   return (
     <ToastCtx.Provider value={value}>

@@ -226,10 +226,17 @@ export function ActivityForm({
   const [geocoding, setGeocoding] = useState(false);
   const [geocodeInfo, setGeocodeInfo] = useState<string | null>(null);
 
+  // On reset le formulaire SEULEMENT quand l'id change (vraie nouvelle activité
+  // à éditer), pas à chaque re-render qui passerait une nouvelle référence
+  // d'objet pour la même activité (load() des parents recrée les rows).
+  // Sans ça, taper vite dans un champ pendant qu'un load() async termine
+  // wipe les modifications non sauvegardées.
+  const initialId = (initial as any)?.id ?? null;
   useEffect(() => {
     setValues(initial ? activityToForm(initial) : emptyActivityForm());
     setError(null);
-  }, [initial]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialId]);
 
   function update<K extends keyof ActivityFormValues>(
     k: K,
