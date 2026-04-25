@@ -50,6 +50,11 @@ export function Submissions() {
   const [rejectNote, setRejectNote] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('table');
   const [cardIndex, setCardIndex] = useState(0);
+  // Trace l'ID de la soumission actuellement affichée en mode cartes,
+  // pour rester sur la même fiche après load() même si l'ordre change
+  // ou si une autre soumission est filtrée. Quand la fiche disparaît
+  // (filtrée out), seule l'action explicite ✓/✗/🕒 fait avancer.
+  const [currentCardId, setCurrentCardId] = useState<number | null>(null);
   const [locating, setLocating] = useState<ActivitySubmission | null>(null);
   const { adminProfile } = useAuth();
   const toast = useToast();
@@ -104,6 +109,28 @@ export function Submissions() {
   const pendingCount = rows.filter((r) => r.status === 'pending').length;
   const onHoldCount = rows.filter((r) => r.status === 'on_hold').length;
   const trackedCount = rows.filter((r) => !!(r as any).update_frequency).length;
+
+  // Synchronise currentCardId avec la position actuelle au démarrage
+  // du mode cartes (si on n'a pas encore traqué d'ID).
+  useEffect(() => {
+    if (viewMode !== 'cards') return;
+    if (currentCardId === null && filtered.length > 0) {
+      setCurrentCardId(filtered[Math.min(cardIndex, filtered.length - 1)]?.id ?? null);
+    }
+  }, [viewMode, filtered, cardIndex, currentCardId]);
+
+  // Si la liste filtree change (re-tri, edition d'un champ qui change
+  // l'ordre) ET qu'on a un currentCardId, on cherche son nouvel index.
+  // Si trouve, on met cardIndex a jour. Si la fiche a disparu (filter
+  // out apres approve/reject), seule l'action ✓/✗/🕒 explicite a fait
+  // avancer — on suit cette progression.
+  useEffect(() => {
+    if (viewMode !== 'cards' || currentCardId === null) return;
+    const idx = filtered.findIndex((s) => s.id === currentCardId);
+    if (idx >= 0 && idx !== cardIndex) {
+      setCardIndex(idx);
+    }
+  }, [filtered, currentCardId, viewMode, cardIndex]);
 
   async function handleHold(s: ActivitySubmission) {
     const { error } = await supabase
@@ -292,7 +319,10 @@ export function Submissions() {
         <CardDeck
           submissions={filtered}
           index={cardIndex}
-          onIndexChange={setCardIndex}
+          onIndexChange={(i) => {
+            setCardIndex(i);
+            setCurrentCardId(filtered[i]?.id ?? null);
+          }}
           onApprove={handleApprove}
           onHold={handleHold}
           onReopen={handleReopen}
