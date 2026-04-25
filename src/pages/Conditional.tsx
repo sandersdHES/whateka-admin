@@ -574,7 +574,7 @@ function WeeklyChart({
         <div className="text-xs text-slate-500">52 semaines</div>
       </div>
       <div className="relative">
-        <div className="flex h-28 items-end gap-[3px]">
+        <div className="flex h-28 items-stretch gap-[3px]">
           {weeks.map((w) => {
             const ratio = max > 0 ? w.count / max : 0;
             const heightPct = w.count > 0 ? Math.max(8, ratio * 100) : 2;
@@ -586,7 +586,7 @@ function WeeklyChart({
             return (
               <div
                 key={w.weekIndex}
-                className="group relative flex-1"
+                className="group relative flex flex-1 items-end"
                 title={tooltip}
               >
                 <div
