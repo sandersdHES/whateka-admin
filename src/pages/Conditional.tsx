@@ -224,14 +224,24 @@ export function Conditional() {
     for (let w = 0; w < 52; w++) {
       const ws = new Date(start);
       ws.setDate(ws.getDate() + w * 7);
-      // Sample: milieu de la semaine (mercredi midi) pour stabilité.
-      const sample = new Date(ws);
-      sample.setDate(sample.getDate() + 2);
-      sample.setHours(12, 0, 0, 0);
+      // On teste chaque jour de la semaine (lundi → dimanche).
+      // Une activité compte pour cette semaine si elle est proposable
+      // au moins un jour de la semaine. Indispensable pour les weekly_days
+      // (ex: marché du samedi -> visible uniquement le samedi de chaque semaine).
       let count = 0;
       for (const a of rows) {
-        if (isExpired(a, sample)) continue;
-        if (isProposableNow(a, sample)) count++;
+        let visibleAtLeastOneDay = false;
+        for (let d = 0; d < 7; d++) {
+          const sample = new Date(ws);
+          sample.setDate(sample.getDate() + d);
+          sample.setHours(12, 0, 0, 0);
+          if (isExpired(a, sample)) continue;
+          if (isProposableNow(a, sample)) {
+            visibleAtLeastOneDay = true;
+            break;
+          }
+        }
+        if (visibleAtLeastOneDay) count++;
       }
       weeks.push({ weekIndex: w, weekStart: ws, count });
     }
