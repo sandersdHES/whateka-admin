@@ -11,6 +11,7 @@ import {
   Pencil,
   Save,
   Search,
+  Sparkles,
   X,
 } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
@@ -306,6 +307,17 @@ export function Submissions() {
               await load();
             }
           }}
+          onFieldUpdate={async (s, field, value) => {
+            const { error } = await supabase
+              .from('activity_submissions')
+              .update({ [field]: value })
+              .eq('id', s.id);
+            if (error) toast.error(error.message);
+            else {
+              toast.success('Champ mis à jour.');
+              await load();
+            }
+          }}
         />
       ) : (
         <div className="overflow-hidden rounded-2xl bg-white shadow-soft ring-1 ring-slate-100">
@@ -507,6 +519,7 @@ function CardDeck({
   onReject,
   onEdit,
   onLocationChange,
+  onFieldUpdate,
 }: {
   submissions: ActivitySubmission[];
   index: number;
@@ -517,6 +530,7 @@ function CardDeck({
   onReject: (s: ActivitySubmission) => void;
   onEdit: (s: ActivitySubmission) => void;
   onLocationChange: (s: ActivitySubmission, lat: number, lng: number) => void;
+  onFieldUpdate: (s: ActivitySubmission, field: string, value: any) => void;
 }) {
   const [pendingCoords, setPendingCoords] = useState<{ lat: number; lng: number } | null>(null);
 
@@ -649,29 +663,73 @@ function CardDeck({
             </div>
           </div>
 
-          {s.description && (
-            <p className="mt-3 text-sm leading-relaxed text-slate-600">{s.description}</p>
+          <div className="mt-3">
+            {s.description ? (
+              <p className="text-sm leading-relaxed text-slate-600">{s.description}</p>
+            ) : (
+              <EnrichField
+                submission={s}
+                field="description"
+                label="Description"
+                onAccept={(v) => onFieldUpdate(s, 'description', v)}
+              />
+            )}
+          </div>
+
+          {/* URL si vide → bouton enrich */}
+          {!s.activity_url && (
+            <div className="mt-3">
+              <EnrichField
+                submission={s}
+                field="activity_url"
+                label="URL de l'activité"
+                onAccept={(v) => onFieldUpdate(s, 'activity_url', v)}
+              />
+            </div>
           )}
 
           <div className="mt-4 grid grid-cols-2 gap-3 text-xs md:grid-cols-4">
-            <Meta label="Durée" value={formatDuration(s.duration_minutes)} />
-            <Meta label="Prix" value={formatPrice(s.price_level)} />
+            <MetaOrEnrich
+              label="Durée"
+              empty={!s.duration_minutes}
+              value={formatDuration(s.duration_minutes)}
+              submission={s}
+              field="duration_minutes"
+              onAccept={(v) => onFieldUpdate(s, 'duration_minutes', v)}
+            />
+            <MetaOrEnrich
+              label="Prix"
+              empty={!s.price_level}
+              value={formatPrice(s.price_level)}
+              submission={s}
+              field="price_level"
+              onAccept={(v) => onFieldUpdate(s, 'price_level', v)}
+            />
             <Meta label="Soumis le" value={formatDate(s.created_at)} />
             <Meta label="Indoor / Outdoor" value={`${s.is_indoor ? 'Indoor' : ''}${s.is_indoor && s.is_outdoor ? ' · ' : ''}${s.is_outdoor ? 'Outdoor' : ''}` || '—'} />
           </div>
 
-          {(s.features ?? []).length > 0 && (
-            <div className="mt-4 flex flex-wrap gap-1.5">
-              {(s.features ?? []).map((f) => (
-                <span
-                  key={f}
-                  className="rounded-md bg-slate-100 px-2 py-1 text-xs text-slate-700"
-                >
-                  {f}
-                </span>
-              ))}
-            </div>
-          )}
+          <div className="mt-4">
+            {(s.features ?? []).length > 0 ? (
+              <div className="flex flex-wrap gap-1.5">
+                {(s.features ?? []).map((f) => (
+                  <span
+                    key={f}
+                    className="rounded-md bg-slate-100 px-2 py-1 text-xs text-slate-700"
+                  >
+                    {f}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <EnrichField
+                submission={s}
+                field="features"
+                label="Caractéristiques"
+                onAccept={(v) => onFieldUpdate(s, 'features', v)}
+              />
+            )}
+          </div>
 
           {/* Map editable : clic pour changer la localisation */}
           <div className="mt-5">
@@ -791,6 +849,159 @@ function Meta({ label, value }: { label: string; value: string }) {
         {label}
       </div>
       <div className="mt-0.5 font-medium text-slate-700">{value}</div>
+    </div>
+  );
+}
+
+function MetaOrEnrich({
+  label,
+  empty,
+  value,
+  submission,
+  field,
+  onAccept,
+}: {
+  label: string;
+  empty: boolean;
+  value: string;
+  submission: ActivitySubmission;
+  field: string;
+  onAccept: (v: any) => void;
+}) {
+  if (!empty) return <Meta label={label} value={value} />;
+  return (
+    <div>
+      <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+        {label}
+      </div>
+      <EnrichField
+        submission={submission}
+        field={field}
+        label={label}
+        compact
+        onAccept={onAccept}
+      />
+    </div>
+  );
+}
+
+/**
+ * Champ "vide" cliquable qui lance l'edge function `enrich-submission`
+ * (Gemini + Google Search) pour proposer une valeur. Si valeur trouvée,
+ * affiche aperçu + accept/reject. Si aucune info, affiche un message.
+ */
+function EnrichField({
+  submission,
+  field,
+  label,
+  compact = false,
+  onAccept,
+}: {
+  submission: ActivitySubmission;
+  field: string;
+  label: string;
+  compact?: boolean;
+  onAccept: (value: any) => void;
+}) {
+  const [state, setState] = useState<'idle' | 'loading' | 'result' | 'empty'>('idle');
+  const [suggestion, setSuggestion] = useState<any>(null);
+
+  async function search() {
+    setState('loading');
+    try {
+      const { data, error } = await supabase.functions.invoke<{ value: any | null; raw?: string }>(
+        'enrich-submission',
+        { body: { id: submission.id, field, table: 'activity_submissions' } },
+      );
+      if (error) throw error;
+      const value = data?.value;
+      const isEmpty =
+        value == null ||
+        (typeof value === 'string' && value.trim() === '') ||
+        (Array.isArray(value) && value.length === 0);
+      if (isEmpty) {
+        setState('empty');
+        setTimeout(() => setState('idle'), 3000);
+      } else {
+        setSuggestion(value);
+        setState('result');
+      }
+    } catch (_e) {
+      setState('empty');
+      setTimeout(() => setState('idle'), 3000);
+    }
+  }
+
+  function accept() {
+    onAccept(suggestion);
+    setState('idle');
+    setSuggestion(null);
+  }
+
+  if (state === 'idle') {
+    return (
+      <button
+        onClick={search}
+        className={`group inline-flex items-center gap-1.5 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-slate-500 transition hover:border-brand-cyan hover:bg-brand-cyan/5 hover:text-brand-cyan ${
+          compact ? 'text-xs' : 'text-sm'
+        }`}
+        title={`Chercher ${label.toLowerCase()} avec l'IA`}
+      >
+        <Sparkles size={compact ? 12 : 14} className="text-amber-500" />
+        <span>Chercher avec l'IA</span>
+      </button>
+    );
+  }
+
+  if (state === 'loading') {
+    return (
+      <div className="inline-flex items-center gap-2 rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-600">
+        <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-slate-300 border-t-brand-cyan" />
+        Recherche en cours…
+      </div>
+    );
+  }
+
+  if (state === 'empty') {
+    return (
+      <div className="inline-flex items-center gap-1.5 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-700 ring-1 ring-rose-200">
+        Pas d'information trouvée
+      </div>
+    );
+  }
+
+  // result
+  let preview: string;
+  if (Array.isArray(suggestion)) {
+    preview = suggestion.join(', ');
+  } else if (typeof suggestion === 'object' && suggestion !== null) {
+    preview = JSON.stringify(suggestion);
+  } else {
+    preview = String(suggestion);
+  }
+  return (
+    <div className="rounded-lg bg-amber-50 p-3 ring-1 ring-amber-200">
+      <div className="flex items-start gap-2">
+        <Sparkles size={14} className="mt-0.5 shrink-0 text-amber-600" />
+        <div className="min-w-0 flex-1 break-words text-xs text-slate-800">{preview}</div>
+      </div>
+      <div className="mt-2 flex gap-2">
+        <button
+          onClick={accept}
+          className="inline-flex items-center gap-1 rounded-md bg-emerald-500 px-2.5 py-1 text-xs font-semibold text-white hover:bg-emerald-600"
+        >
+          <Check size={12} /> Accepter
+        </button>
+        <button
+          onClick={() => {
+            setState('idle');
+            setSuggestion(null);
+          }}
+          className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-200"
+        >
+          Rejeter
+        </button>
+      </div>
     </div>
   );
 }
