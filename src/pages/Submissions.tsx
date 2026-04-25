@@ -50,6 +50,12 @@ export function Submissions() {
   const [rejectNote, setRejectNote] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('table');
   const [cardIndex, setCardIndex] = useState(0);
+  // Si on detecte des doublons potentiels lors d'un approve, on bloque
+  // l'operation et on demande a l'admin laquelle garder.
+  const [duplicateCheck, setDuplicateCheck] = useState<{
+    submission: ActivitySubmission;
+    matches: any[];
+  } | null>(null);
   // Trace l'ID de la soumission actuellement affichée en mode cartes,
   // pour rester sur la même fiche après load() même si l'ordre change
   // ou si une autre soumission est filtrée. Quand la fiche disparaît
@@ -174,6 +180,28 @@ export function Submissions() {
   }
 
   async function handleApprove(s: ActivitySubmission) {
+    // Garde-fou : vérifie qu'aucune activité similaire n'existe déjà
+    // (triangulation titre + lieu + URL, 2/3 critères suffisent).
+    try {
+      const { data } = await supabase.functions.invoke<{ matches?: any[] }>('detect-duplicate', {
+        body: {
+          title: s.title,
+          location_name: s.location_name,
+          activity_url: s.activity_url,
+        },
+      });
+      const matches = data?.matches ?? [];
+      if (matches.length > 0) {
+        setDuplicateCheck({ submission: s, matches });
+        return; // L'admin doit choisir avant que l'approbation ait lieu
+      }
+    } catch (_e) {
+      // En cas d'erreur du detecteur, on continue (garde-fou non bloquant)
+    }
+    await performApprove(s);
+  }
+
+  async function performApprove(s: ActivitySubmission) {
     const payload = formToPayload({
       title: s.title,
       location_name: s.location_name,
@@ -593,6 +621,159 @@ export function Submissions() {
           />
         )}
       </Modal>
+
+      {/* Modal garde-fou doublons : avant approve, si triangulation 2/3 */}
+      <Modal
+        open={duplicateCheck !== null}
+        onClose={() => setDuplicateCheck(null)}
+        title="⚠ Activité potentiellement déjà existante"
+        maxWidth="max-w-3xl"
+      >
+        {duplicateCheck && (
+          <DuplicatePrompt
+            submission={duplicateCheck.submission}
+            matches={duplicateCheck.matches}
+            onApproveAnyway={async () => {
+              const sub = duplicateCheck.submission;
+              setDuplicateCheck(null);
+              await performApprove(sub);
+            }}
+            onKeepExisting={async (existingId) => {
+              const sub = duplicateCheck.submission;
+              // Marque la soumission comme rejetée avec note explicite
+              const { error } = await supabase
+                .from('activity_submissions')
+                .update({
+                  status: 'rejected',
+                  admin_notes: `Doublon de l'activité #${existingId} (validée).`,
+                  reviewed_at: new Date().toISOString(),
+                  reviewed_by: adminProfile?.email ?? null,
+                })
+                .eq('id', sub.id);
+              if (error) toast.error(error.message);
+              else toast.success('Soumission rejetée comme doublon.');
+              setDuplicateCheck(null);
+              await load();
+            }}
+            onCancel={() => setDuplicateCheck(null)}
+          />
+        )}
+      </Modal>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DuplicatePrompt : affichage des candidats doublons avec choix admin.
+// ─────────────────────────────────────────────────────────────────────────────
+
+type DuplicateMatch = {
+  id: number;
+  title: string;
+  location_name: string;
+  activity_url: string | null;
+  image_url: string | null;
+  matched_fields: string[];
+};
+
+function DuplicatePrompt({
+  submission,
+  matches,
+  onApproveAnyway,
+  onKeepExisting,
+  onCancel,
+}: {
+  submission: ActivitySubmission;
+  matches: DuplicateMatch[];
+  onApproveAnyway: () => void;
+  onKeepExisting: (existingId: number) => void;
+  onCancel: () => void;
+}) {
+  const fieldLabel = (f: string) =>
+    f === 'title' ? 'Titre' : f === 'location' ? 'Lieu' : f === 'url' ? 'Site web' : f;
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900 ring-1 ring-amber-200">
+        Une ou plusieurs activités déjà <strong>validées</strong> ressemblent à cette soumission.
+        Vérifie qu'il ne s'agit pas du même évènement avant d'approuver.
+      </div>
+
+      {/* Soumission en cours */}
+      <div className="rounded-xl bg-sky-50 p-4 ring-1 ring-sky-200">
+        <div className="text-[10px] font-semibold uppercase tracking-wide text-sky-700">
+          Soumission à approuver
+        </div>
+        <div className="mt-1 font-semibold text-slate-900">{submission.title}</div>
+        <div className="text-xs text-slate-600">
+          📍 {submission.location_name}
+          {submission.activity_url && (
+            <span className="ml-2">🔗 {new URL(submission.activity_url).hostname.replace(/^www\./, '')}</span>
+          )}
+        </div>
+      </div>
+
+      <div className="text-xs font-semibold text-slate-600">
+        {matches.length} activité{matches.length > 1 ? 's' : ''} similaire{matches.length > 1 ? 's' : ''} trouvée{matches.length > 1 ? 's' : ''} :
+      </div>
+
+      <div className="space-y-2">
+        {matches.map((m) => (
+          <div key={m.id} className="rounded-xl bg-white p-4 ring-1 ring-slate-200">
+            <div className="flex items-start gap-3">
+              {m.image_url ? (
+                <img
+                  src={m.image_url}
+                  alt={m.title}
+                  className="h-16 w-24 shrink-0 rounded-md object-cover"
+                  onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
+                />
+              ) : (
+                <div className="h-16 w-24 shrink-0 rounded-md bg-slate-100" />
+              )}
+              <div className="min-w-0 flex-1">
+                <div className="font-semibold text-slate-900">{m.title}</div>
+                <div className="text-xs text-slate-500">
+                  #{m.id} · 📍 {m.location_name}
+                  {m.activity_url && (
+                    <span className="ml-2">
+                      🔗 {(() => { try { return new URL(m.activity_url!).hostname.replace(/^www\./, ''); } catch { return m.activity_url; } })()}
+                    </span>
+                  )}
+                </div>
+                <div className="mt-1.5 flex flex-wrap gap-1">
+                  {m.matched_fields.map((f) => (
+                    <span
+                      key={f}
+                      className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-700"
+                    >
+                      {fieldLabel(f)} similaire
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <button
+                onClick={() => onKeepExisting(m.id)}
+                className="shrink-0 rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-600"
+              >
+                Garder celle-ci
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-3">
+        <button onClick={onCancel} className="btn-ghost">
+          Annuler
+        </button>
+        <button
+          onClick={onApproveAnyway}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-600"
+        >
+          Approuver quand même (créer en double)
+        </button>
+      </div>
     </div>
   );
 }
