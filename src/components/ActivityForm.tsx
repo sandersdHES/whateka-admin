@@ -331,33 +331,33 @@ export function ActivityForm({
             onChange={(e) => update('image_url', e.target.value)}
             placeholder="https://..."
           />
-          {values.image_url.trim() && (
-            <div className="mt-2 overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
-              <img
-                src={values.image_url}
-                alt="Aperçu"
-                className="h-40 w-full object-cover"
-                onError={(e) => {
-                  (e.currentTarget as HTMLImageElement).style.display = 'none';
-                  const sib = e.currentTarget.nextElementSibling as HTMLElement | null;
-                  if (sib) sib.style.display = 'flex';
-                }}
-                onLoad={(e) => {
-                  (e.currentTarget as HTMLImageElement).style.display = 'block';
-                  const sib = e.currentTarget.nextElementSibling as HTMLElement | null;
-                  if (sib) sib.style.display = 'none';
-                }}
-              />
-              <div
-                className="hidden h-40 w-full items-center justify-center text-xs text-slate-400"
-                style={{ display: 'none' }}
-              >
-                Image introuvable
-              </div>
-            </div>
-          )}
         </div>
       </div>
+
+      {values.image_url.trim() && (
+        <div>
+          <label className="label">Aperçu de l'image</label>
+          <div className="overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+            <img
+              key={values.image_url}
+              src={values.image_url}
+              alt="Aperçu"
+              className="block h-56 w-full object-cover"
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).style.display = 'none';
+                const sib = e.currentTarget.nextElementSibling as HTMLElement | null;
+                if (sib) sib.style.display = 'flex';
+              }}
+            />
+            <div
+              className="h-56 w-full items-center justify-center text-xs text-slate-400"
+              style={{ display: 'none' }}
+            >
+              Image introuvable
+            </div>
+          </div>
+        </div>
+      )}
 
       <div>
         <button
