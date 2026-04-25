@@ -595,7 +595,7 @@ function CardDeck({
 
       {/* Card */}
       <div className="relative w-full max-w-2xl overflow-hidden rounded-3xl bg-white shadow-xl ring-1 ring-slate-200/60">
-        {/* Image */}
+        {/* Image (cliquable pour rechercher si vide) */}
         <div className="relative h-72 w-full bg-slate-100">
           {s.image_url ? (
             <img
@@ -608,9 +608,7 @@ function CardDeck({
               }}
             />
           ) : (
-            <div className="flex h-full w-full items-center justify-center text-sm text-slate-400">
-              Aucune image
-            </div>
+            <ImageEnricher submission={s} onAccept={(url) => onFieldUpdate(s, 'image_url', url)} />
           )}
           {/* Status badge */}
           <span
@@ -849,6 +847,106 @@ function Meta({ label, value }: { label: string; value: string }) {
         {label}
       </div>
       <div className="mt-0.5 font-medium text-slate-700">{value}</div>
+    </div>
+  );
+}
+
+/**
+ * Quand une soumission n'a pas d'image, affiche un placeholder cliquable
+ * qui lance fetch-place-photo (Google Places). Si trouve, propose un
+ * aperçu + accept/reject. Sinon, message "Pas d'information trouvée".
+ */
+function ImageEnricher({
+  submission,
+  onAccept,
+}: {
+  submission: ActivitySubmission;
+  onAccept: (url: string) => void;
+}) {
+  const [state, setState] = useState<'idle' | 'loading' | 'result' | 'empty'>('idle');
+  const [imgUrl, setImgUrl] = useState<string | null>(null);
+
+  async function search() {
+    setState('loading');
+    try {
+      const query = `${submission.title} ${submission.location_name} Switzerland`;
+      const { data, error } = await supabase.functions.invoke<{ url?: string; error?: string }>(
+        'fetch-place-photo',
+        { body: { query } },
+      );
+      if (error || !data?.url) {
+        setState('empty');
+        setTimeout(() => setState('idle'), 3000);
+        return;
+      }
+      setImgUrl(data.url);
+      setState('result');
+    } catch (_e) {
+      setState('empty');
+      setTimeout(() => setState('idle'), 3000);
+    }
+  }
+
+  if (state === 'idle') {
+    return (
+      <button
+        onClick={search}
+        className="group flex h-full w-full flex-col items-center justify-center gap-3 text-slate-400 transition hover:bg-slate-50 hover:text-slate-600"
+      >
+        <Sparkles size={32} className="text-amber-400 transition group-hover:scale-110" />
+        <div className="text-sm font-medium">Aucune image</div>
+        <div className="rounded-full bg-white px-4 py-2 text-xs font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200 group-hover:bg-brand-cyan group-hover:text-white">
+          ✨ Chercher avec l'IA
+        </div>
+      </button>
+    );
+  }
+
+  if (state === 'loading') {
+    return (
+      <div className="flex h-full w-full flex-col items-center justify-center gap-3 text-slate-500">
+        <span className="inline-block h-8 w-8 animate-spin rounded-full border-3 border-slate-200 border-t-brand-cyan" />
+        <div className="text-sm">Recherche en cours…</div>
+      </div>
+    );
+  }
+
+  if (state === 'empty') {
+    return (
+      <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-rose-700">
+        <X size={32} />
+        <div className="text-sm font-medium">Pas d'information trouvée</div>
+      </div>
+    );
+  }
+
+  // result : preview avec accept/reject
+  return (
+    <div className="relative h-full w-full">
+      {imgUrl && (
+        <img src={imgUrl} alt="Suggestion" className="h-full w-full object-cover" />
+      )}
+      <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-2 bg-gradient-to-t from-black/70 to-transparent p-4">
+        <button
+          onClick={() => {
+            if (imgUrl) onAccept(imgUrl);
+            setState('idle');
+            setImgUrl(null);
+          }}
+          className="inline-flex items-center gap-1 rounded-md bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-600"
+        >
+          <Check size={13} /> Accepter
+        </button>
+        <button
+          onClick={() => {
+            setState('idle');
+            setImgUrl(null);
+          }}
+          className="rounded-md bg-white/90 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-white"
+        >
+          Rejeter
+        </button>
+      </div>
     </div>
   );
 }
