@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Check, ExternalLink, Pencil, Search, X } from 'lucide-react';
+import { Check, Clock, ExternalLink, Pencil, Search, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { ActivitySubmission } from '../lib/types';
 import { categoryLabel, formatDate, formatDuration } from '../lib/format';
@@ -10,7 +10,7 @@ import { ActivityForm, formToPayload } from '../components/ActivityForm';
 import { useAuth } from '../lib/auth';
 import { useToast } from '../components/Toast';
 
-type Tab = 'pending' | 'all';
+type Tab = 'pending' | 'on_hold' | 'all';
 type SortKey = 'created_desc' | 'created_asc' | 'title_asc' | 'title_desc';
 
 const SORT_OPTIONS: { value: SortKey; label: string }[] = [
@@ -50,6 +50,7 @@ export function Submissions() {
   const filtered = useMemo(() => {
     const base = rows.filter((r) => {
       if (tab === 'pending' && r.status !== 'pending') return false;
+      if (tab === 'on_hold' && r.status !== 'on_hold') return false;
       if (search && !r.title.toLowerCase().includes(search.toLowerCase())) return false;
       return true;
     });
@@ -76,6 +77,35 @@ export function Submissions() {
   }, [rows, tab, search, sort]);
 
   const pendingCount = rows.filter((r) => r.status === 'pending').length;
+  const onHoldCount = rows.filter((r) => r.status === 'on_hold').length;
+
+  async function handleHold(s: ActivitySubmission) {
+    const { error } = await supabase
+      .from('activity_submissions')
+      .update({
+        status: 'on_hold',
+        reviewed_at: new Date().toISOString(),
+        reviewed_by: adminProfile?.email ?? null,
+      })
+      .eq('id', s.id);
+    if (error) toast.error(error.message);
+    else toast.success('Soumission mise en attente.');
+    await load();
+  }
+
+  async function handleReopen(s: ActivitySubmission) {
+    const { error } = await supabase
+      .from('activity_submissions')
+      .update({
+        status: 'pending',
+        reviewed_at: null,
+        reviewed_by: null,
+      })
+      .eq('id', s.id);
+    if (error) toast.error(error.message);
+    else toast.success('Soumission remise dans les nouvelles.');
+    await load();
+  }
 
   async function handleSave(values: Parameters<typeof formToPayload>[0]) {
     if (!editing) return;
@@ -150,13 +180,13 @@ export function Submissions() {
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Soumissions</h1>
         <p className="text-sm text-slate-500">
-          {pendingCount} soumission{pendingCount > 1 ? 's' : ''} en attente.
+          {pendingCount} nouvelle{pendingCount > 1 ? 's' : ''} · {onHoldCount} en attente.
         </p>
       </div>
 
       <div className="flex flex-wrap gap-3">
         <div className="inline-flex overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-slate-200">
-          {(['pending', 'all'] as Tab[]).map((t) => (
+          {(['pending', 'on_hold', 'all'] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -164,7 +194,11 @@ export function Submissions() {
                 tab === t ? 'bg-brand-cyan text-white' : 'text-slate-700 hover:bg-slate-50'
               }`}
             >
-              {t === 'pending' ? `En attente (${pendingCount})` : 'Toutes'}
+              {t === 'pending'
+                ? `Nouvelles (${pendingCount})`
+                : t === 'on_hold'
+                  ? `En attente (${onHoldCount})`
+                  : 'Toutes'}
             </button>
           ))}
         </div>
@@ -223,13 +257,21 @@ export function Submissions() {
                     <span
                       className={`badge ${
                         s.status === 'pending'
-                          ? 'bg-amber-100 text-amber-800'
-                          : s.status === 'approved'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : 'bg-rose-100 text-rose-800'
+                          ? 'bg-sky-100 text-sky-800'
+                          : s.status === 'on_hold'
+                            ? 'bg-amber-100 text-amber-800'
+                            : s.status === 'approved'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-rose-100 text-rose-800'
                       }`}
                     >
-                      {s.status === 'pending' ? 'En attente' : s.status === 'approved' ? 'Approuvée' : 'Rejetée'}
+                      {s.status === 'pending'
+                        ? 'Nouvelle'
+                        : s.status === 'on_hold'
+                          ? 'En attente'
+                          : s.status === 'approved'
+                            ? 'Approuvée'
+                            : 'Rejetée'}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-slate-500">{formatDate(s.created_at)}</td>
@@ -253,7 +295,7 @@ export function Submissions() {
                       >
                         <Pencil size={16} />
                       </button>
-                      {s.status === 'pending' && (
+                      {(s.status === 'pending' || s.status === 'on_hold') && (
                         <>
                           <button
                             onClick={() => handleApprove(s)}
@@ -262,6 +304,23 @@ export function Submissions() {
                           >
                             <Check size={16} />
                           </button>
+                          {s.status === 'pending' ? (
+                            <button
+                              onClick={() => handleHold(s)}
+                              className="rounded-md p-2 text-amber-600 hover:bg-amber-50"
+                              title="Mettre en attente"
+                            >
+                              <Clock size={16} />
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleReopen(s)}
+                              className="rounded-md p-2 text-sky-600 hover:bg-sky-50"
+                              title="Remettre dans les nouvelles"
+                            >
+                              <Clock size={16} />
+                            </button>
+                          )}
                           <button
                             onClick={() => setRejecting(s)}
                             className="rounded-md p-2 text-rose-500 hover:bg-rose-50"

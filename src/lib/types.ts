@@ -69,7 +69,7 @@ export type Activity = {
 export type ActivitySubmission = Omit<Activity, 'id' | 'created_at'> & {
   id: number;
   submitted_by: string | null;
-  status: 'pending' | 'approved' | 'rejected';
+  status: 'pending' | 'approved' | 'rejected' | 'on_hold';
   admin_notes: string | null;
   reviewed_at: string | null;
   reviewed_by: string | null;
