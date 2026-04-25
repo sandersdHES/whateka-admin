@@ -565,7 +565,7 @@ function WeeklyChart({
     <div className="rounded-2xl bg-white p-5 shadow-soft ring-1 ring-slate-100">
       <div className="mb-3 flex items-baseline justify-between">
         <div>
-          <div className="text-sm font-semibold text-slate-900">Disponibilité par semaine</div>
+          <div className="text-sm font-semibold text-slate-900">📊 Disponibilité par semaine</div>
           <div className="text-xs text-slate-500">
             Nombre d'activités proposables chaque semaine de {year}
             {max > 0 ? ` · pic : ${max}` : ''}
