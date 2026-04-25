@@ -816,20 +816,19 @@ function CardDeck({
 
           {/* Map editable : clic pour changer la localisation */}
           <div className="mt-5">
-            <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+            <div className="mb-2 flex items-center justify-between">
               <span className="text-xs font-semibold text-slate-700">
                 Localisation {pendingCoords && <span className="ml-1 text-amber-600">(modifiée)</span>}
               </span>
-              <div className="flex items-center gap-3">
-                <CardGeocodeButton
-                  submission={s}
-                  onResult={(lat, lng) => setPendingCoords({ lat, lng })}
-                />
-                <span className="text-[11px] text-slate-500">
-                  {(pendingCoords?.lat ?? s.latitude).toFixed(5)}, {(pendingCoords?.lng ?? s.longitude).toFixed(5)}
-                </span>
-              </div>
+              <span className="text-[11px] text-slate-500">
+                {(pendingCoords?.lat ?? s.latitude).toFixed(5)}, {(pendingCoords?.lng ?? s.longitude).toFixed(5)}
+              </span>
             </div>
+            {/* Gros bouton "Localiser avec l'IA" sur toute la largeur */}
+            <CardGeocodeButton
+              submission={s}
+              onResult={(lat, lng) => setPendingCoords({ lat, lng })}
+            />
             <div className="overflow-hidden rounded-xl ring-1 ring-slate-200" style={{ height: 220 }}>
               <MapContainer
                 key={s.id}
@@ -1028,16 +1027,16 @@ function CardGeocodeButton({
 
   if (feedback === 'ok') {
     return (
-      <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700 ring-1 ring-emerald-200">
-        <Check size={11} /> Localisation trouvée
-      </span>
+      <div className="mb-2 flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700 ring-1 ring-emerald-200">
+        <Check size={16} /> Localisation trouvée — vérifie sur la carte puis enregistre
+      </div>
     );
   }
   if (feedback === 'empty') {
     return (
-      <span className="inline-flex items-center gap-1 rounded-md bg-rose-50 px-2 py-1 text-[11px] font-semibold text-rose-700 ring-1 ring-rose-200">
-        Pas de résultat
-      </span>
+      <div className="mb-2 flex w-full items-center justify-center gap-2 rounded-lg bg-rose-50 px-4 py-2.5 text-sm font-semibold text-rose-700 ring-1 ring-rose-200">
+        <X size={16} /> Pas de résultat — ajuste manuellement sur la carte
+      </div>
     );
   }
 
@@ -1045,18 +1044,18 @@ function CardGeocodeButton({
     <button
       onClick={run}
       disabled={busy}
-      className="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-800 transition hover:bg-amber-100 disabled:opacity-60"
+      className="mb-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-800 transition hover:bg-amber-100 hover:shadow-sm disabled:opacity-60"
       title="Localiser automatiquement via Google Places"
     >
       {busy ? (
         <>
-          <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-amber-300 border-t-amber-700" />
-          Localisation…
+          <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-amber-300 border-t-amber-700" />
+          Localisation en cours…
         </>
       ) : (
         <>
-          <Sparkles size={11} />
-          Localiser avec l'IA
+          <Sparkles size={16} />
+          Localiser avec l'IA (Google Places)
         </>
       )}
     </button>
