@@ -28,7 +28,7 @@ import { ActivityForm, formToPayload } from '../components/ActivityForm';
 import { useAuth } from '../lib/auth';
 import { useToast } from '../components/Toast';
 
-type Tab = 'pending' | 'on_hold' | 'tracked' | 'all';
+type Tab = 'pending' | 'on_hold' | 'tracked' | 'user' | 'all';
 type SortKey = 'created_desc' | 'created_asc' | 'title_asc' | 'title_desc';
 type ViewMode = 'table' | 'cards';
 
@@ -62,6 +62,10 @@ export function Submissions() {
   // (filtrée out), seule l'action explicite ✓/✗/🕒 fait avancer.
   const [currentCardId, setCurrentCardId] = useState<number | null>(null);
   const [locating, setLocating] = useState<ActivitySubmission | null>(null);
+  // Liste des emails admin charges depuis admin_users : sert a distinguer
+  // les soumissions venant de l'app mobile (utilisateurs finaux) de celles
+  // ajoutees par un admin pour suivi/test.
+  const [adminEmails, setAdminEmails] = useState<Set<string>>(new Set());
   const { adminProfile } = useAuth();
   const toast = useToast();
 
@@ -80,6 +84,37 @@ export function Submissions() {
     load();
   }, [load]);
 
+  // Charge la liste des emails admin une fois pour pouvoir filtrer les
+  // soumissions venant de "vrais utilisateurs" dans l'onglet dedie.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase.from('admin_users').select('email');
+      if (cancelled) return;
+      const set = new Set<string>(
+        (data ?? [])
+          .map((r: { email: string | null }) => r.email?.toLowerCase().trim())
+          .filter((e): e is string => !!e),
+      );
+      setAdminEmails(set);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  /**
+   * Une soumission est consideree "utilisateur" si elle a un email
+   * `submitted_by` non vide ET que cet email n'appartient pas a la liste
+   * des admins. Les anciennes soumissions sans email (seedees via SQL) sont
+   * traitees comme admin / interne.
+   */
+  function isUserSubmission(r: ActivitySubmission): boolean {
+    const email = r.submitted_by?.toLowerCase().trim();
+    if (!email) return false;
+    return !adminEmails.has(email);
+  }
+
   const filtered = useMemo(() => {
     const base = rows.filter((r) => {
       if (tab === 'pending' && r.status !== 'pending') return false;
@@ -87,6 +122,7 @@ export function Submissions() {
       if (tab === 'tracked') {
         if (!(r as any).update_frequency) return false;
       }
+      if (tab === 'user' && !isUserSubmission(r)) return false;
       if (search && !r.title.toLowerCase().includes(search.toLowerCase())) return false;
       return true;
     });
@@ -115,6 +151,12 @@ export function Submissions() {
   const pendingCount = rows.filter((r) => r.status === 'pending').length;
   const onHoldCount = rows.filter((r) => r.status === 'on_hold').length;
   const trackedCount = rows.filter((r) => !!(r as any).update_frequency).length;
+  // Compte les soumissions venant des utilisateurs finaux (app mobile),
+  // sans dependre du statut — on veut voir le total / pending / etc.
+  const userCount = rows.filter((r) => isUserSubmission(r)).length;
+  const userPendingCount = rows.filter(
+    (r) => isUserSubmission(r) && (r.status === 'pending' || r.status === 'on_hold'),
+  ).length;
 
   // Synchronise currentCardId avec la position actuelle au démarrage
   // du mode cartes (si on n'a pas encore traqué d'ID).
@@ -284,13 +326,14 @@ export function Submissions() {
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Soumissions</h1>
         <p className="text-sm text-slate-500">
-          {pendingCount} nouvelle{pendingCount > 1 ? 's' : ''} · {onHoldCount} en attente.
+          {pendingCount} nouvelle{pendingCount > 1 ? 's' : ''} · {onHoldCount} en attente
+          {userPendingCount > 0 ? ` · ${userPendingCount} utilisateur${userPendingCount > 1 ? 's' : ''} à valider` : ''}.
         </p>
       </div>
 
       <div className="flex flex-wrap gap-3">
         <div className="inline-flex overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-slate-200">
-          {(['pending', 'on_hold', 'tracked', 'all'] as Tab[]).map((t) => (
+          {(['pending', 'on_hold', 'tracked', 'user', 'all'] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -304,7 +347,9 @@ export function Submissions() {
                   ? `En attente (${onHoldCount})`
                   : t === 'tracked'
                     ? `À tenir à jour (${trackedCount})`
-                    : 'Toutes'}
+                    : t === 'user'
+                      ? `Utilisateurs (${userCount})`
+                      : 'Toutes'}
             </button>
           ))}
         </div>
@@ -412,7 +457,17 @@ export function Submissions() {
               {filtered.map((s) => (
                 <tr key={s.id} className="hover:bg-slate-50/60">
                   <td className="px-4 py-3">
-                    <div className="font-semibold text-slate-900">{s.title}</div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-semibold text-slate-900">{s.title}</span>
+                      {isUserSubmission(s) && (
+                        <span
+                          className="inline-flex items-center gap-1 rounded-full bg-fuchsia-100 px-2 py-0.5 text-[10px] font-semibold text-fuchsia-700"
+                          title={`Soumis par ${s.submitted_by ?? ''}`}
+                        >
+                          👤 Utilisateur
+                        </span>
+                      )}
+                    </div>
                     <div className="mt-0.5 flex items-center gap-1.5 text-xs text-slate-500">
                       <span>#{s.id}</span>
                       <CategoryChips category={s.category} />
@@ -957,7 +1012,17 @@ function CardDeck({
         <div className="p-6">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <h3 className="text-xl font-bold text-slate-900">{s.title}</h3>
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-xl font-bold text-slate-900">{s.title}</h3>
+                {s.submitted_by && (
+                  <span
+                    className="inline-flex items-center gap-1 rounded-full bg-fuchsia-100 px-2 py-0.5 text-[10px] font-semibold text-fuchsia-700"
+                    title={s.submitted_by}
+                  >
+                    👤 {s.submitted_by}
+                  </span>
+                )}
+              </div>
               <div className="mt-1 flex items-center gap-1 text-sm text-slate-500">
                 <MapPin size={14} />
                 <span>{s.location_name}</span>

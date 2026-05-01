@@ -619,17 +619,29 @@ export function ActivityForm({
                 <option value="">— (aucune)</option>
                 <option value="one_off">Événement ponctuel (dates précises)</option>
                 <option value="weekly">Récurrence hebdomadaire (jour(s) de la semaine)</option>
-                <option value="seasonal">Saisonnier (mois de l'année)</option>
+                <option value="seasonal">Saisonnier (mois OU dates précises chaque année)</option>
               </select>
               <p className="mt-1 text-xs text-slate-500">
                 Astuce : les 3 contraintes ci-dessous se combinent (ex: marché folklorique
                 de Vevey = samedis + juillet-août).
               </p>
+              {values.recurrence_type === 'seasonal' && (
+                <p className="mt-1 rounded-md bg-sky-50 px-2 py-1.5 text-xs text-sky-800 ring-1 ring-sky-200">
+                  💡 Pour un saisonnier, tu peux choisir <b>soit les mois</b> (gros granularité)
+                  <b> soit des dates précises d'ouverture/fermeture</b> (ex : remontées mécaniques
+                  ouvertes du 12 décembre au 5 avril). L'année est ignorée — la fenêtre se
+                  répète chaque année.
+                </p>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="label">Date de début (optionnel)</label>
+                <label className="label">
+                  {values.recurrence_type === 'seasonal'
+                    ? "Date d'ouverture (mois + jour, l'année est ignorée)"
+                    : 'Date de début (optionnel)'}
+                </label>
                 <input
                   className="input"
                   type="date"
@@ -638,7 +650,11 @@ export function ActivityForm({
                 />
               </div>
               <div>
-                <label className="label">Date de fin (optionnel)</label>
+                <label className="label">
+                  {values.recurrence_type === 'seasonal'
+                    ? "Date de fermeture (mois + jour, l'année est ignorée)"
+                    : 'Date de fin (optionnel)'}
+                </label>
                 <input
                   className="input"
                   type="date"
