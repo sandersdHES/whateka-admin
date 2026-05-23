@@ -55,6 +55,7 @@ export type ActivityFormValues = {
   social_tags: string[];
   is_indoor: boolean;
   is_outdoor: boolean;
+  is_whateka_certified: boolean;
   date_label: string;
   date_start: string;
   date_end: string;
@@ -83,6 +84,7 @@ export function emptyActivityForm(): ActivityFormValues {
     social_tags: [],
     is_indoor: false,
     is_outdoor: true,
+    is_whateka_certified: false,
     date_label: '',
     date_start: '',
     date_end: '',
@@ -116,6 +118,7 @@ export function activityToForm(a: Partial<Activity>): ActivityFormValues {
     social_tags: a.social_tags ?? [],
     is_indoor: a.is_indoor ?? false,
     is_outdoor: a.is_outdoor ?? true,
+    is_whateka_certified: (a as any).is_whateka_certified ?? false,
     date_label: (a as any).date_label ?? '',
     date_start: (a as any).date_start ?? '',
     date_end: (a as any).date_end ?? '',
@@ -159,6 +162,7 @@ export function formToPayload(v: ActivityFormValues) {
     social_tags: v.social_tags,
     is_indoor: v.is_indoor,
     is_outdoor: v.is_outdoor,
+    is_whateka_certified: v.is_whateka_certified,
     date_label: v.date_label.trim() || null,
     date_start: v.date_start || null,
     date_end: v.date_end || null,
@@ -830,6 +834,28 @@ export function ActivityForm({
             Outdoor
           </label>
         </div>
+      </fieldset>
+
+      {/* Badge "Whateka Verified" : coche par l'admin quand l'activite a ete
+          testee et approuvee par l'equipe. Affiche un badge a cote des
+          categories cote app. */}
+      <fieldset className="rounded-lg border border-cyan-200 bg-cyan-50/50 p-3">
+        <legend className="label px-2">Certification Whateka</legend>
+        <label className="flex items-start gap-3 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-cyan focus:ring-brand-cyan"
+            checked={values.is_whateka_certified}
+            onChange={(e) => update('is_whateka_certified', e.target.checked)}
+          />
+          <span>
+            <span className="font-medium">Testée et approuvée par l'équipe Whateka</span>
+            <br />
+            <span className="text-xs text-slate-500">
+              Affiche un badge "W" à côté des catégories sur la card et la fiche détail dans l'app.
+            </span>
+          </span>
+        </label>
       </fieldset>
 
       <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-4">

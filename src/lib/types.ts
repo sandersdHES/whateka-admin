@@ -106,6 +106,10 @@ export type Activity = {
   description_en: string | null;
   date_label_en: string | null;
   update_notes_en: string | null;
+  // Badge "Whateka Verified" : coche par l'admin quand l'activite a ete
+  // testee et approuvee par l'equipe. Affiche un badge a cote des
+  // categories sur la card / fiche detail cote app.
+  is_whateka_certified: boolean;
 };
 
 export type ActivitySubmission = Omit<Activity, 'id' | 'created_at'> & {
