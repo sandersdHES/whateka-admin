@@ -9,6 +9,7 @@ import { EmptyState } from '../components/ui/EmptyState';
 import { Modal } from '../components/Modal';
 import { ActivityForm, formToPayload } from '../components/ActivityForm';
 import { useToast } from '../components/Toast';
+import { WhatekaCertifiedToggle } from '../components/WhatekaCertifiedToggle';
 
 type SortKey = 'created_desc' | 'created_asc' | 'title_asc' | 'title_desc';
 
@@ -156,6 +157,7 @@ export function Activities() {
                 <th className="px-4 py-3">Lieu</th>
                 <th className="px-4 py-3">Durée</th>
                 <th className="px-4 py-3">Type</th>
+                <th className="px-4 py-3 text-center">Certifié</th>
                 <th className="px-4 py-3 text-right">Actions</th>
               </tr>
             </thead>
@@ -189,6 +191,24 @@ export function Activities() {
                     <span className="badge bg-slate-100 text-slate-700">
                       {toIndoorOutdoorLabel(a.is_indoor, a.is_outdoor)}
                     </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex justify-center">
+                      <WhatekaCertifiedToggle
+                        table="activities"
+                        rowId={a.id}
+                        certified={!!a.is_whateka_certified}
+                        onChange={(next) =>
+                          setRows((rs) =>
+                            rs.map((r) =>
+                              r.id === a.id
+                                ? { ...r, is_whateka_certified: next }
+                                : r,
+                            ),
+                          )
+                        }
+                      />
+                    </div>
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex justify-end gap-1">

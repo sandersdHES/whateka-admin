@@ -27,6 +27,7 @@ import { Modal } from '../components/Modal';
 import { ActivityForm, formToPayload } from '../components/ActivityForm';
 import { useAuth } from '../lib/auth';
 import { useToast } from '../components/Toast';
+import { WhatekaCertifiedToggle } from '../components/WhatekaCertifiedToggle';
 
 type Tab = 'pending' | 'on_hold' | 'tracked' | 'user' | 'all';
 type SortKey = 'created_desc' | 'created_asc' | 'title_asc' | 'title_desc';
@@ -284,6 +285,8 @@ export function Submissions() {
       update_frequency: (s as any).update_frequency ?? '',
       next_update_at: (s as any).next_update_at ?? '',
       update_notes: (s as any).update_notes ?? '',
+      // v36 : conserve le flag "Whateka Verified" lors du passage submission -> activity.
+      is_whateka_certified: (s as any).is_whateka_certified ?? false,
     });
     const { error: insErr } = await supabase.from('activities').insert(payload);
     if (insErr) {
@@ -428,6 +431,19 @@ export function Submissions() {
             }
           }}
           onFieldUpdate={async (s, field, value) => {
+            // is_whateka_certified est déjà écrit côté Supabase par le
+            // WhatekaCertifiedToggle (avec son propre toast). Pour éviter
+            // un double-write, on se contente de refresh l'état local ici.
+            if (field === 'is_whateka_certified') {
+              setRows((rs) =>
+                rs.map((r) =>
+                  r.id === s.id
+                    ? ({ ...r, is_whateka_certified: value } as ActivitySubmission)
+                    : r,
+                ),
+              );
+              return;
+            }
             const { error } = await supabase
               .from('activity_submissions')
               .update({ [field]: value })
@@ -450,6 +466,7 @@ export function Submissions() {
                 <th className="px-4 py-3">Durée</th>
                 <th className="px-4 py-3">Statut</th>
                 <th className="px-4 py-3">Soumis le</th>
+                <th className="px-4 py-3 text-center">Certifié</th>
                 <th className="px-4 py-3 text-right">Actions</th>
               </tr>
             </thead>
@@ -497,6 +514,24 @@ export function Submissions() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-slate-500">{formatDate(s.created_at)}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex justify-center">
+                      <WhatekaCertifiedToggle
+                        table="activity_submissions"
+                        rowId={s.id}
+                        certified={!!(s as any).is_whateka_certified}
+                        onChange={(next) =>
+                          setRows((rs) =>
+                            rs.map((r) =>
+                              r.id === s.id
+                                ? ({ ...r, is_whateka_certified: next } as ActivitySubmission)
+                                : r,
+                            ),
+                          )
+                        }
+                      />
+                    </div>
+                  </td>
                   <td className="px-4 py-3">
                     <div className="flex justify-end gap-1">
                       {s.activity_url && (
@@ -1028,7 +1063,16 @@ function CardDeck({
                 <span>{s.location_name}</span>
               </div>
             </div>
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col items-end gap-1.5">
+              <WhatekaCertifiedToggle
+                table="activity_submissions"
+                rowId={s.id}
+                certified={!!(s as any).is_whateka_certified}
+                onChange={(next) =>
+                  onFieldUpdate(s, 'is_whateka_certified', next)
+                }
+                size={32}
+              />
               {s.activity_url && (
                 <a
                   href={s.activity_url}
