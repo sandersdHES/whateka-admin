@@ -24,7 +24,7 @@ const NAV = [
   { to: '/questionnaires', label: 'Questionnaire feedback', icon: ListChecks },
   { to: '/stats', label: 'Statistiques', icon: BarChart3 },
   { to: '/users', label: 'Gestion utilisateurs', icon: Users, superAdmin: true },
-  { to: '/access', label: 'Accès bêta', icon: KeyRound, superAdmin: true },
+  { to: '/access', label: 'Accès', icon: KeyRound, superAdmin: true },
 ];
 
 export function Sidebar() {
