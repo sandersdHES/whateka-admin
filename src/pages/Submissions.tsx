@@ -28,6 +28,7 @@ import { ActivityForm, formToPayload } from '../components/ActivityForm';
 import { useAuth } from '../lib/auth';
 import { useToast } from '../components/Toast';
 import { WhatekaCertifiedToggle } from '../components/WhatekaCertifiedToggle';
+import { CategoryChips } from '../components/CategoryChips';
 
 type Tab = 'pending' | 'on_hold' | 'tracked' | 'user' | 'all';
 type SortKey = 'created_desc' | 'created_asc' | 'title_asc' | 'title_desc';
@@ -121,7 +122,7 @@ export function Submissions() {
       if (tab === 'pending' && r.status !== 'pending') return false;
       if (tab === 'on_hold' && r.status !== 'on_hold') return false;
       if (tab === 'tracked') {
-        if (!(r as any).update_frequency) return false;
+        if (!r.update_frequency) return false;
       }
       if (tab === 'user' && !isUserSubmission(r)) return false;
       if (search && !r.title.toLowerCase().includes(search.toLowerCase())) return false;
@@ -151,7 +152,7 @@ export function Submissions() {
 
   const pendingCount = rows.filter((r) => r.status === 'pending').length;
   const onHoldCount = rows.filter((r) => r.status === 'on_hold').length;
-  const trackedCount = rows.filter((r) => !!(r as any).update_frequency).length;
+  const trackedCount = rows.filter((r) => !!r.update_frequency).length;
   // Compte les soumissions venant des utilisateurs finaux (app mobile),
   // sans dependre du statut — on veut voir le total / pending / etc.
   const userCount = rows.filter((r) => isUserSubmission(r)).length;
@@ -276,17 +277,17 @@ export function Submissions() {
       social_tags: s.social_tags ?? [],
       is_indoor: s.is_indoor ?? false,
       is_outdoor: s.is_outdoor ?? true,
-      date_label: (s as any).date_label ?? '',
-      date_start: (s as any).date_start ?? '',
-      date_end: (s as any).date_end ?? '',
-      recurrence_type: (s as any).recurrence_type ?? '',
-      seasonal_months: (s as any).seasonal_months ?? [],
-      weekly_days: (s as any).weekly_days ?? [],
-      update_frequency: (s as any).update_frequency ?? '',
-      next_update_at: (s as any).next_update_at ?? '',
-      update_notes: (s as any).update_notes ?? '',
+      date_label: s.date_label ?? '',
+      date_start: s.date_start ?? '',
+      date_end: s.date_end ?? '',
+      recurrence_type: s.recurrence_type ?? '',
+      seasonal_months: s.seasonal_months ?? [],
+      weekly_days: s.weekly_days ?? [],
+      update_frequency: s.update_frequency ?? '',
+      next_update_at: s.next_update_at ?? '',
+      update_notes: s.update_notes ?? '',
       // v36 : conserve le flag "Whateka Verified" lors du passage submission -> activity.
-      is_whateka_certified: (s as any).is_whateka_certified ?? false,
+      is_whateka_certified: s.is_whateka_certified ?? false,
     });
     const { error: insErr } = await supabase.from('activities').insert(payload);
     if (insErr) {
@@ -519,7 +520,7 @@ export function Submissions() {
                       <WhatekaCertifiedToggle
                         table="activity_submissions"
                         rowId={s.id}
-                        certified={!!(s as any).is_whateka_certified}
+                        certified={!!s.is_whateka_certified}
                         onChange={(next) =>
                           setRows((rs) =>
                             rs.map((r) =>
@@ -1067,7 +1068,7 @@ function CardDeck({
               <WhatekaCertifiedToggle
                 table="activity_submissions"
                 rowId={s.id}
-                certified={!!(s as any).is_whateka_certified}
+                certified={!!s.is_whateka_certified}
                 onChange={(next) =>
                   onFieldUpdate(s, 'is_whateka_certified', next)
                 }
@@ -1282,45 +1283,10 @@ function CardDeck({
   );
 }
 
-/**
- * Affiche les catégories d'une activité sous forme de petites pastilles
- * colorées avec le label complet — pour utilisation inline dans tableaux
- * et listes denses (sans devoir ouvrir la fiche).
- */
-export function CategoryChips({
-  category,
-  size = 'sm',
-}: {
-  category: string | null | undefined;
-  size?: 'xs' | 'sm';
-}) {
-  if (!category) return null;
-  const cats = category
-    .split(',')
-    .map((c) => c.trim().toLowerCase())
-    .filter(Boolean);
-  if (cats.length === 0) return null;
-
-  const padding = size === 'xs' ? 'px-1.5 py-0.5' : 'px-2 py-0.5';
-  const text = size === 'xs' ? 'text-[10px]' : 'text-[11px]';
-
-  return (
-    <div className="flex flex-wrap gap-1">
-      {cats.map((c) => {
-        const color = CATEGORY_COLORS[c] ?? '#94a3b8';
-        return (
-          <span
-            key={c}
-            className={`inline-flex items-center rounded-full font-semibold text-white ${padding} ${text}`}
-            style={{ backgroundColor: color }}
-          >
-            {categoryLabel(c)}
-          </span>
-        );
-      })}
-    </div>
-  );
-}
+// CategoryChips a ete deplace vers src/components/CategoryChips.tsx (audit
+// 2026-05). On re-exporte ici pour ne pas casser les imports existants
+// `import { CategoryChips } from './Submissions'`.
+export { CategoryChips } from '../components/CategoryChips';
 
 function Meta({ label, value }: { label: string; value: string }) {
   return (

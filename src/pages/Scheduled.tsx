@@ -5,7 +5,6 @@ import {
   CheckCircle2,
   ExternalLink,
   Pencil,
-  RefreshCw,
   Search,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
