@@ -3,7 +3,11 @@ import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import App from './App';
 import { AuthProvider } from './lib/auth';
+import { initSentry } from './lib/sentry';
 import './index.css';
+
+// No-op si VITE_SENTRY_DSN absent. Cf. src/lib/sentry.ts.
+initSentry();
 
 const redirect = sessionStorage.getItem('spa-redirect');
 if (redirect) {

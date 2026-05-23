@@ -18,10 +18,20 @@ jobs:
           node-version: '20'
           cache: 'npm'
       - run: npm ci
+      - name: Verify required secrets
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$VITE_SUPABASE_URL" ] || [ -z "$VITE_SUPABASE_ANON_KEY" ]; then
+            echo "::error::Repository secrets VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY must be set."
+            exit 1
+          fi
       - run: npm run build
         env:
-          VITE_SUPABASE_URL: https://pqywriedvxsdngypplpg.supabase.co
-          VITE_SUPABASE_ANON_KEY: sb_publishable_KzcTKvqLTbWoECaUkD--xw_xJ8A35K6
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
       - uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}

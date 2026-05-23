@@ -3,7 +3,7 @@ import { ExternalLink, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { CATEGORIES, type Activity } from '../lib/types';
 import { formatDuration, toIndoorOutdoorLabel } from '../lib/format';
-import { CategoryChips } from './Submissions';
+import { CategoryChips } from '../components/CategoryChips';
 import { Loader } from '../components/ui/Loader';
 import { EmptyState } from '../components/ui/EmptyState';
 import { Modal } from '../components/Modal';
