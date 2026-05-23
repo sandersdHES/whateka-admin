@@ -42,16 +42,19 @@ export const PRICE_LEVELS: { value: number; label: string }[] = [
   { value: 5, label: '100+ CHF' },
 ];
 
+// Palette v2 (mai 2026) : couleurs sémantiques distinctes par catégorie.
+// Doit rester synchronisée avec la palette de l'app Flutter
+// (whateka/lib/widgets/activity_card.dart `categoryColors`).
 export const CATEGORY_COLORS: Record<string, string> = {
-  nature: '#97C45F',
-  culture: '#926335',
-  gastronomy: '#F6AE2D',
-  sport: '#00B8D9',
-  adventure: '#FF6F61',
-  relax: '#a78bfa',
-  fun: '#ec4899',
-  event: '#dc2626',
-  institution: '#475569',
+  nature: '#16A34A',       // vert forêt
+  culture: '#92400E',      // brun terre cuite
+  gastronomy: '#EA580C',   // orange épices
+  sport: '#0EA5E9',        // bleu énergie
+  adventure: '#CA8A04',    // ambre soleil
+  relax: '#A78BFA',        // lilas pastel
+  fun: '#EC4899',          // rose festif
+  event: '#DC2626',        // rouge alerte
+  institution: '#475569',  // gris ardoise
 };
 
 /** Type de récurrence pour les activités à dates particulières. */
