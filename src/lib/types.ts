@@ -15,7 +15,7 @@ export type Category =
 export const CATEGORIES: { value: Category; label: string }[] = [
   { value: 'nature', label: 'Nature' },
   { value: 'culture', label: 'Culture' },
-  { value: 'gastronomy', label: 'Gastronomie' },
+  { value: 'gastronomy', label: 'Gourmandise' },
   { value: 'sport', label: 'Sport' },
   { value: 'adventure', label: 'Aventure' },
   { value: 'relax', label: 'Détente' },
