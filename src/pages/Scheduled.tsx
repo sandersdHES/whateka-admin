@@ -230,8 +230,8 @@ export function Scheduled() {
           description="Configure une fréquence de mise à jour sur une activité pour la voir apparaître ici."
         />
       ) : (
-        <div className="overflow-hidden rounded-2xl bg-white shadow-soft ring-1 ring-slate-100">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto rounded-2xl bg-white shadow-soft ring-1 ring-slate-100">
+          <table className="w-full min-w-[760px] text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="px-4 py-3">Activité</th>

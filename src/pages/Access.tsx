@@ -200,7 +200,7 @@ export function Access() {
       </div>
 
       {/* Section 1 : Allowlist */}
-      <div className="overflow-hidden rounded-2xl bg-white shadow-soft ring-1 ring-slate-100">
+      <div className="overflow-x-auto rounded-2xl bg-white shadow-soft ring-1 ring-slate-100">
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
           <h2 className="text-sm font-semibold text-slate-900">Liste blanche (invités directs)</h2>
         </div>
@@ -247,7 +247,7 @@ export function Access() {
         ) : allowlist.length === 0 ? (
           <EmptyState title="Aucun invité" description="Ajoute un email pour donner l'accès à un testeur." />
         ) : (
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[640px] text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="px-4 py-3">Email</th>
@@ -283,7 +283,7 @@ export function Access() {
       </div>
 
       {/* Section 2 : Code users (WLMDY26 beta access code) */}
-      <div className="overflow-hidden rounded-2xl bg-white shadow-soft ring-1 ring-slate-100">
+      <div className="overflow-x-auto rounded-2xl bg-white shadow-soft ring-1 ring-slate-100">
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
           <h2 className="text-sm font-semibold text-slate-900">
             <span className="inline-flex items-center gap-2">
@@ -300,7 +300,7 @@ export function Access() {
             description="Personne n'a encore saisi le code d'accès."
           />
         ) : (
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[640px] text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="px-4 py-3">Email</th>
@@ -344,7 +344,7 @@ export function Access() {
       </div>
 
       {/* Section 3 : Codes promo (Premium) — WHATEKA2026 + WA2026 + … */}
-      <div className="overflow-hidden rounded-2xl bg-white shadow-soft ring-1 ring-slate-100">
+      <div className="overflow-x-auto rounded-2xl bg-white shadow-soft ring-1 ring-slate-100">
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
           <h2 className="text-sm font-semibold text-slate-900">
             <span className="inline-flex items-center gap-2">
@@ -363,7 +363,7 @@ export function Access() {
             description="Personne n'a encore utilisé un code promo Premium."
           />
         ) : (
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[640px] text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="px-4 py-3">Email</th>
