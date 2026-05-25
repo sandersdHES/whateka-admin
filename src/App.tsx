@@ -10,6 +10,7 @@ import { Conditional } from './pages/Conditional';
 import { Scheduled } from './pages/Scheduled';
 import { Submissions } from './pages/Submissions';
 import { Feedbacks } from './pages/Feedbacks';
+import { Messages } from './pages/Messages';
 import { Questionnaires } from './pages/Questionnaires';
 import { Users } from './pages/Users';
 import { Stats } from './pages/Stats';
@@ -33,6 +34,7 @@ export default function App() {
           <Route path="/submissions" element={<Submissions />} />
           <Route path="/access" element={<Access />} />
           <Route path="/feedbacks" element={<Feedbacks />} />
+          <Route path="/messages" element={<Messages />} />
           <Route path="/questionnaires" element={<Questionnaires />} />
           <Route
             path="/users"
