@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Archive, Check, Eye, Mail, MailOpen, MessageSquare, Reply } from 'lucide-react';
+import { Archive, Check, Eye, Mail, MailOpen, Send } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Loader } from '../components/ui/Loader';
 import { EmptyState } from '../components/ui/EmptyState';
@@ -22,6 +22,17 @@ type ContactMessage = {
   reviewed_at: string | null;
   reviewed_by: string | null;
   admin_notes: string | null;
+};
+
+type Reply = {
+  id: number;
+  contact_message_id: number;
+  created_at: string;
+  author_role: 'user' | 'admin';
+  author_user_id: string | null;
+  author_email: string | null;
+  author_name: string | null;
+  message: string;
 };
 
 type Tab = 'new' | 'all' | 'responded' | 'archived';
@@ -52,8 +63,12 @@ export function Messages() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>('new');
   const [open, setOpen] = useState<ContactMessage | null>(null);
+  const [thread, setThread] = useState<Reply[]>([]);
+  const [loadingThread, setLoadingThread] = useState(false);
   const [adminNotes, setAdminNotes] = useState('');
   const [savingNotes, setSavingNotes] = useState(false);
+  const [replyText, setReplyText] = useState('');
+  const [sendingReply, setSendingReply] = useState(false);
   const toast = useToast();
   const { adminProfile } = useAuth();
 
@@ -90,6 +105,22 @@ export function Messages() {
     }),
     [rows],
   );
+
+  async function loadThread(messageId: number) {
+    setLoadingThread(true);
+    const { data, error } = await supabase
+      .from('contact_message_replies')
+      .select('*')
+      .eq('contact_message_id', messageId)
+      .order('created_at', { ascending: true });
+    setLoadingThread(false);
+    if (error) {
+      toast.error(error.message);
+      setThread([]);
+      return;
+    }
+    setThread((data as Reply[]) ?? []);
+  }
 
   async function updateStatus(msg: ContactMessage, status: Status) {
     const { error } = await supabase
@@ -132,9 +163,37 @@ export function Messages() {
     );
   }
 
+  async function sendReply() {
+    if (!open) return;
+    const text = replyText.trim();
+    if (!text) return;
+    setSendingReply(true);
+    const { error } = await supabase.from('contact_message_replies').insert({
+      contact_message_id: open.id,
+      author_role: 'admin',
+      author_email: adminProfile?.email ?? null,
+      author_name: adminProfile?.name ?? null,
+      message: text,
+    });
+    setSendingReply(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    setReplyText('');
+    toast.success('Réponse envoyée.');
+    // Le trigger DB met automatiquement le status à 'responded'
+    await loadThread(open.id);
+    await load();
+    // Refresh local "open" pour avoir le nouveau status
+    setOpen((prev) => prev ? { ...prev, status: 'responded' } : prev);
+  }
+
   function openMessage(msg: ContactMessage) {
     setOpen(msg);
     setAdminNotes(msg.admin_notes ?? '');
+    setReplyText('');
+    void loadThread(msg.id);
     // Si nouveau, marque comme lu auto
     if (msg.status === 'new') {
       void updateStatus(msg, 'read');
@@ -147,7 +206,7 @@ export function Messages() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Messages</h1>
           <p className="text-sm text-slate-500">
-            Messages envoyés par les utilisateurs depuis le profil de l'app.
+            Conversations entre l'équipe Whateka et les utilisateurs.
           </p>
         </div>
         <div className="flex items-center gap-2 rounded-full bg-sky-50 px-3 py-1.5 text-sm text-sky-700 ring-1 ring-sky-100">
@@ -237,19 +296,10 @@ export function Messages() {
                       <button
                         onClick={() => openMessage(m)}
                         className="rounded-md p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-                        title="Voir le message"
+                        title="Voir / répondre"
                       >
                         <Eye size={16} />
                       </button>
-                      {m.status !== 'responded' && (
-                        <button
-                          onClick={() => updateStatus(m, 'responded')}
-                          className="rounded-md p-2 text-emerald-600 hover:bg-emerald-50"
-                          title="Marquer comme répondu"
-                        >
-                          <Reply size={16} />
-                        </button>
-                      )}
                       {m.status !== 'archived' && (
                         <button
                           onClick={() => updateStatus(m, 'archived')}
@@ -271,7 +321,7 @@ export function Messages() {
       <Modal
         open={open !== null}
         onClose={() => setOpen(null)}
-        title="Message"
+        title="Conversation"
         maxWidth="max-w-2xl"
       >
         {open && (
@@ -292,44 +342,81 @@ export function Messages() {
                 </span>
               </div>
               <div className="mt-2 text-xs text-slate-500">
-                Envoyé le {formatDateTime(open.created_at)}
-                {open.reviewed_at && open.reviewed_by && (
-                  <span>
-                    {' · '}Traité par {open.reviewed_by} le{' '}
-                    {formatDateTime(open.reviewed_at)}
-                  </span>
-                )}
+                Sujet : <span className="font-semibold">{open.subject}</span>
               </div>
             </div>
 
-            {/* Sujet */}
-            <div>
-              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                Sujet
-              </div>
-              <div className="text-lg font-semibold text-slate-900">
-                {open.subject}
-              </div>
+            {/* Thread chat-style */}
+            <div className="space-y-3">
+              {/* Message initial */}
+              <ChatBubble
+                side="left"
+                author={open.sender_name ?? open.sender_email ?? 'Utilisateur'}
+                authorRole="user"
+                createdAt={open.created_at}
+                message={open.message}
+              />
+
+              {/* Réponses successives */}
+              {loadingThread ? (
+                <div className="text-center text-sm text-slate-400">
+                  Chargement du fil…
+                </div>
+              ) : (
+                thread.map((r) => (
+                  <ChatBubble
+                    key={r.id}
+                    side={r.author_role === 'admin' ? 'right' : 'left'}
+                    author={
+                      r.author_name ??
+                      r.author_email ??
+                      (r.author_role === 'admin' ? 'Équipe Whateka' : 'Utilisateur')
+                    }
+                    authorRole={r.author_role}
+                    createdAt={r.created_at}
+                    message={r.message}
+                  />
+                ))
+              )}
             </div>
 
-            {/* Message */}
-            <div>
-              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                Message
+            {/* Composer admin */}
+            {open.status !== 'archived' && (
+              <div className="space-y-2">
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  Répondre à l'utilisateur
+                </div>
+                <textarea
+                  className="input min-h-[90px] w-full"
+                  placeholder="Ton message s'affichera dans l'app de l'utilisateur."
+                  value={replyText}
+                  onChange={(e) => setReplyText(e.target.value)}
+                />
+                <div className="flex justify-end">
+                  <button
+                    onClick={sendReply}
+                    disabled={sendingReply || !replyText.trim()}
+                    className="inline-flex items-center gap-2 rounded-lg bg-brand-cyan px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-cyan/90 disabled:opacity-50"
+                  >
+                    {sendingReply ? (
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+                    ) : (
+                      <Send size={16} />
+                    )}
+                    {sendingReply ? 'Envoi…' : 'Envoyer'}
+                  </button>
+                </div>
               </div>
-              <div className="whitespace-pre-wrap rounded-xl bg-white p-4 text-sm text-slate-800 ring-1 ring-slate-100">
-                {open.message}
-              </div>
-            </div>
+            )}
 
-            {/* Notes admin */}
+            {/* Notes admin internes */}
             <div>
               <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
                 Notes internes (invisible pour l'utilisateur)
               </div>
               <textarea
-                className="input min-h-[80px] w-full"
-                placeholder="Ex: répondu sur Instagram le 12 mai, bug confirmé, etc."
+                className="input min-h-[60px] w-full"
+                placeholder="Ex: bug confirmé, demande de remboursement, etc."
                 value={adminNotes}
                 onChange={(e) => setAdminNotes(e.target.value)}
               />
@@ -337,7 +424,7 @@ export function Messages() {
                 <button
                   onClick={saveAdminNotes}
                   disabled={savingNotes}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-brand-cyan px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-cyan/90 disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-200 disabled:opacity-50"
                 >
                   <Check size={14} />
                   Enregistrer les notes
@@ -345,32 +432,23 @@ export function Messages() {
               </div>
             </div>
 
-            {/* Actions principales */}
+            {/* Actions secondaires */}
             <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-4">
-              {open.sender_email && (
-                <a
-                  href={`mailto:${open.sender_email}?subject=Re: ${encodeURIComponent(open.subject)}`}
-                  className="inline-flex items-center gap-2 rounded-lg bg-brand-cyan px-4 py-2 text-sm font-semibold text-white hover:bg-brand-cyan/90"
-                >
-                  <Reply size={16} />
-                  Répondre par email
-                </a>
-              )}
-              {open.status !== 'responded' && (
+              {open.status !== 'responded' && open.status !== 'archived' && (
                 <button
                   onClick={() => updateStatus(open, 'responded')}
-                  className="inline-flex items-center gap-2 rounded-lg bg-emerald-100 px-4 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-200"
+                  className="inline-flex items-center gap-2 rounded-lg bg-emerald-100 px-3 py-1.5 text-sm font-medium text-emerald-800 hover:bg-emerald-200"
                 >
-                  <MailOpen size={16} />
+                  <MailOpen size={14} />
                   Marquer comme répondu
                 </button>
               )}
               {open.status !== 'archived' && (
                 <button
                   onClick={() => updateStatus(open, 'archived')}
-                  className="inline-flex items-center gap-2 rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200"
+                  className="inline-flex items-center gap-2 rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200"
                 >
-                  <Archive size={16} />
+                  <Archive size={14} />
                   Archiver
                 </button>
               )}
@@ -382,5 +460,35 @@ export function Messages() {
   );
 }
 
-// Empêche le warning import inutilisé pour MessageSquare/Mail (utilisés dans icon ailleurs)
-void MessageSquare;
+/* ───── Bulle de chat ───── */
+type ChatBubbleProps = {
+  side: 'left' | 'right';
+  author: string;
+  authorRole: 'user' | 'admin';
+  createdAt: string;
+  message: string;
+};
+
+function ChatBubble({ side, author, authorRole, createdAt, message }: ChatBubbleProps) {
+  const isAdmin = authorRole === 'admin';
+  return (
+    <div className={`flex ${side === 'right' ? 'justify-end' : 'justify-start'}`}>
+      <div className={`max-w-[80%] ${side === 'right' ? 'text-right' : 'text-left'}`}>
+        <div className="mb-1 text-[11px] text-slate-500">
+          <span className="font-semibold">{isAdmin ? 'Équipe Whateka' : author}</span>
+          <span className="mx-1.5 text-slate-300">·</span>
+          <span>{formatDateTime(createdAt)}</span>
+        </div>
+        <div
+          className={`whitespace-pre-wrap rounded-2xl px-3.5 py-2.5 text-sm ${
+            isAdmin
+              ? 'bg-brand-cyan text-white'
+              : 'bg-slate-100 text-slate-800'
+          }`}
+        >
+          {message}
+        </div>
+      </div>
+    </div>
+  );
+}
